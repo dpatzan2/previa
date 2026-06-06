@@ -1,14 +1,17 @@
 "use client";
 
 import { Save } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useActionState } from "react";
 import { savePredictionsAction } from "@/app/actions";
+import { FormFeedback, useActionFeedback } from "@/components/FormFeedback";
 import { MatchPickCard } from "@/components/MatchPickCard";
 import { PhaseTabs } from "@/components/PhaseTabs";
+import { SubmitButton } from "@/components/SubmitButton";
 import type { DisplayMatch, DisplayPrediction, PeerPrediction } from "@/lib/match-ui";
 import { deadlinesByStage, type SerializedPhaseDeadline } from "@/lib/phase-deadlines";
 import { stageLabels } from "@/lib/stages";
 import type { MatchStage } from "@prisma/client";
+import { useMemo, useState } from "react";
 
 type PicksFormProps = {
   matches: DisplayMatch[];
@@ -34,9 +37,11 @@ export function PicksForm({
   );
   const [activeStage, setActiveStage] = useState<MatchStage>(stages[0] ?? "GROUP");
   const activePhaseLocked = deadlineMap[activeStage]?.locked ?? false;
+  const [saveState, saveAction, isSaving] = useActionState(savePredictionsAction, null);
+  const feedback = useActionFeedback(saveState);
 
   return (
-    <form action={savePredictionsAction} className="prediction-form">
+    <form action={saveAction} className="prediction-form">
       <PhaseTabs
         availableStages={stages}
         groupCodes={groupCodes}
@@ -87,21 +92,20 @@ export function PicksForm({
 
               <div className="scoreboard-list">
                 {matches.map((match) => {
-                    const isVisible =
-                      match.stage === stage &&
-                      (stage !== "GROUP" || match.groupCode === groupCode);
-                    const prediction = predictions[match.id];
+                  const isVisible =
+                    match.stage === stage && (stage !== "GROUP" || match.groupCode === groupCode);
+                  const prediction = predictions[match.id];
 
-                    return (
-                      <MatchPickCard
-                        key={match.id}
-                        match={match}
-                        prediction={prediction}
-                        peers={peersByMatch[match.id] ?? []}
-                        hidden={!isVisible}
-                      />
-                    );
-                  })}
+                  return (
+                    <MatchPickCard
+                      key={match.id}
+                      match={match}
+                      prediction={prediction}
+                      peers={peersByMatch[match.id] ?? []}
+                      hidden={!isVisible}
+                    />
+                  );
+                })}
               </div>
             </section>
           );
@@ -109,6 +113,7 @@ export function PicksForm({
       </PhaseTabs>
 
       <div className="sticky-actions picks-actions">
+        <FormFeedback feedback={feedback} />
         {!hasOpenPhases ? (
           <p className="picks-actions-note closed">Todos los pronosticos estan cerrados.</p>
         ) : activePhaseLocked ? (
@@ -116,10 +121,13 @@ export function PicksForm({
             Esta fase ya esta cerrada. Cambia a una fase abierta para guardar cambios.
           </p>
         ) : null}
-        <button className="primary-button" type="submit" disabled={!hasOpenPhases}>
-          <Save size={18} />
-          {hasOpenPhases ? "Guardar pronosticos" : "Pronosticos cerrados"}
-        </button>
+        <SubmitButton
+          isPending={isSaving}
+          pendingLabel="Guardando..."
+          label={hasOpenPhases ? "Guardar pronosticos" : "Pronosticos cerrados"}
+          disabled={!hasOpenPhases}
+          icon={<Save size={18} />}
+        />
       </div>
     </form>
   );
