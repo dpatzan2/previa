@@ -10,7 +10,7 @@ export type ScoringRules = {
 
 export const defaultScoringRules: ScoringRules = {
   groupExactPoints: 3,
-  groupOutcomePoints: 2,
+  groupOutcomePoints: 1,
   knockoutAdvancePoints: 3,
 };
 

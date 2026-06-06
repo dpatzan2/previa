@@ -25,7 +25,7 @@ export function ScoringSettingsForm({ rules }: { rules: ScoringRules }) {
               />
             </label>
             <label>
-              Solo resultado (ganador o empate)
+              Solo ganador o empate (marcador distinto)
               <input
                 name="groupOutcomePoints"
                 type="number"
@@ -51,9 +51,15 @@ export function ScoringSettingsForm({ rules }: { rules: ScoringRules }) {
             </label>
           </fieldset>
         </div>
-        <p className="scoring-rules-note muted">
-          Al guardar se recalculan los puntos de todos los participantes con estas reglas.
-        </p>
+        <ul className="scoring-rules-note muted">
+          <li>Marcador exacto: mismo resultado y mismo ganador o empate.</li>
+          <li>
+            Solo ganador o empate: acierta local, visitante o empate aunque el marcador no
+            coincida (ej. pronostico 0-0 y resultado 1-1).
+          </li>
+          <li>Sin acierto en ganador o empate: 0 puntos.</li>
+          <li>Al guardar se recalculan los puntos de todos los participantes.</li>
+        </ul>
         <button className="primary-button" type="submit">
           <Save size={18} />
           Guardar reglas

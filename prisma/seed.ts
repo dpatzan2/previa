@@ -95,7 +95,7 @@ async function main() {
     create: {
       id: "default",
       groupExactPoints: 3,
-      groupOutcomePoints: 2,
+      groupOutcomePoints: 1,
       knockoutAdvancePoints: 3,
     },
   });

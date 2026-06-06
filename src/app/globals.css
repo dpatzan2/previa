@@ -563,7 +563,10 @@ input:disabled {
 
 .scoring-rules-note {
   margin: 0;
+  padding-left: 18px;
   font-size: 0.86rem;
+  display: grid;
+  gap: 4px;
 }
 
 .sr-only {
