@@ -5,6 +5,13 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import bcrypt from "bcryptjs";
 import fixture from "./fixture-data.json";
 import { parseAppDateTime } from "../src/lib/timezone";
+import { scorePrediction } from "../src/lib/scoring";
+
+const defaultSeedScoringRules = {
+  groupExactPoints: 3,
+  groupOutcomePoints: 1,
+  knockoutAdvancePoints: 3,
+};
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
@@ -91,16 +98,24 @@ async function main() {
 
   await prisma.scoringSettings.upsert({
     where: { id: "default" },
-    update: {},
-    create: {
-      id: "default",
-      groupExactPoints: 3,
-      groupOutcomePoints: 1,
-      knockoutAdvancePoints: 3,
-    },
+    update: defaultSeedScoringRules,
+    create: { id: "default", ...defaultSeedScoringRules },
   });
 
+  const predictions = await prisma.prediction.findMany({ include: { match: true } });
+  for (const prediction of predictions) {
+    await prisma.prediction.update({
+      where: { id: prediction.id },
+      data: {
+        points: scorePrediction(prediction.match, prediction, defaultSeedScoringRules),
+      },
+    });
+  }
+
   console.log("Seed complete");
+  if (predictions.length > 0) {
+    console.log(`Pronosticos recalculados: ${predictions.length}`);
+  }
 }
 
 main()
