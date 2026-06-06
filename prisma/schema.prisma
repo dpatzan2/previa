@@ -1,0 +1,130 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  PLAYER
+}
+
+enum MatchStage {
+  GROUP
+  ROUND_OF_32
+  ROUND_OF_16
+  QUARTER_FINAL
+  SEMIFINAL
+  THIRD_PLACE
+  FINAL
+}
+
+enum MatchStatus {
+  SCHEDULED
+  LIVE
+  FINISHED
+}
+
+enum PickSide {
+  HOME
+  AWAY
+}
+
+model User {
+  id             String       @id @default(cuid())
+  username       String       @unique
+  displayName    String
+  passwordHash   String
+  role           Role         @default(PLAYER)
+  isActive       Boolean      @default(true)
+  canParticipate Boolean      @default(true)
+  sessions       Session[]
+  predictions    Prediction[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Team {
+  id             String       @id @default(cuid())
+  name           String       @unique
+  normalizedName String       @unique
+  groupCode      String?
+  homeMatches    Match[]      @relation("HomeTeam")
+  awayMatches    Match[]      @relation("AwayTeam")
+  actualWins     Match[]      @relation("ActualWinner")
+  predictions    Prediction[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+model Match {
+  id                 String       @id @default(cuid())
+  matchNumber        Int          @unique
+  stage              MatchStage
+  groupCode          String?
+  dateLabel          String?
+  timeLabel          String?
+  kickoffAt          DateTime?
+  venue              String?
+  venueShort         String?
+  homeTeamId         String?
+  awayTeamId         String?
+  homePlaceholder    String?
+  awayPlaceholder    String?
+  homeScore          Int?
+  awayScore          Int?
+  actualWinnerTeamId String?
+  actualWinnerSide   PickSide?
+  actualWinnerLabel  String?
+  status             MatchStatus  @default(SCHEDULED)
+  homeTeam           Team?        @relation("HomeTeam", fields: [homeTeamId], references: [id])
+  awayTeam           Team?        @relation("AwayTeam", fields: [awayTeamId], references: [id])
+  actualWinnerTeam   Team?        @relation("ActualWinner", fields: [actualWinnerTeamId], references: [id])
+  predictions        Prediction[]
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  @@index([stage])
+  @@index([kickoffAt])
+}
+
+model Prediction {
+  id                    String    @id @default(cuid())
+  userId                String
+  matchId               String
+  predictedHomeScore    Int?
+  predictedAwayScore    Int?
+  predictedWinnerTeamId String?
+  predictedWinnerSide   PickSide?
+  points                Int       @default(0)
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  match                 Match     @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  predictedWinnerTeam   Team?     @relation(fields: [predictedWinnerTeamId], references: [id])
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@unique([userId, matchId])
+  @@index([matchId])
+}
+
+model ScoringSettings {
+  id                    String   @id @default("default")
+  groupExactPoints      Int      @default(3)
+  groupOutcomePoints    Int      @default(2)
+  knockoutAdvancePoints Int      @default(3)
+  updatedAt             DateTime @updatedAt
+}
