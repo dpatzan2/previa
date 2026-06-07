@@ -1,35 +1,26 @@
 import { CalendarClock, CheckCircle2, Medal, Shield, Users } from "lucide-react";
+import { QuinielaRulesPanel } from "@/components/QuinielaRulesPanel";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { isNonParticipatingAdmin, participantWhere } from "@/lib/participants";
+import { getScoringRules } from "@/lib/scoring-settings";
 import { stageLabels } from "@/lib/stages";
 
 export default async function DashboardPage() {
   const user = await requireUser();
   const isManagerOnly = isNonParticipatingAdmin(user);
 
-  const [matches, participantCount, mine, leaderboard] = await Promise.all([
+  const [matches, participantCount, mine, scoringRules] = await Promise.all([
     prisma.match.findMany({ orderBy: { matchNumber: "asc" } }),
     prisma.user.count({ where: participantWhere }),
     user.canParticipate
       ? prisma.prediction.findMany({ where: { userId: user.id } })
       : Promise.resolve([]),
-    prisma.user.findMany({
-      where: participantWhere,
-      include: { predictions: true },
-      orderBy: { displayName: "asc" },
-    }),
+    getScoringRules(),
   ]);
 
   const finished = matches.filter((match) => match.status === "FINISHED").length;
   const points = mine.reduce((sum, item) => sum + item.points, 0);
-  const leaders = leaderboard
-    .map((item) => ({
-      name: item.displayName,
-      points: item.predictions.reduce((sum, prediction) => sum + prediction.points, 0),
-    }))
-    .sort((a, b) => b.points - a.points)
-    .slice(0, 5);
   const nextMatch = matches.find((match) => match.kickoffAt && match.kickoffAt > new Date());
 
   return (
@@ -83,20 +74,7 @@ export default async function DashboardPage() {
             })}
           </div>
         </div>
-        <div className="panel">
-          <div className="panel-head">
-            <h2>Tabla rápida</h2>
-          </div>
-          <div className="leader-list">
-            {leaders.map((leader, index) => (
-              <div className="leader-row" key={leader.name}>
-                <span>{index + 1}</span>
-                <strong>{leader.name}</strong>
-                <em>{leader.points} pts</em>
-              </div>
-            ))}
-          </div>
-        </div>
+        <QuinielaRulesPanel rules={scoringRules} />
       </section>
     </div>
   );

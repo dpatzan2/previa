@@ -1,6 +1,6 @@
 import { AdminResultsForm } from "@/components/AdminResultsForm";
+import { AdminUsersPanel } from "@/components/AdminUsersPanel";
 import { CreateUserForm } from "@/components/CreateUserForm";
-import { DeleteUserButton } from "@/components/DeleteUserButton";
 import { ScoringSettingsForm } from "@/components/ScoringSettingsForm";
 import { SyncApiForm } from "@/components/SyncApiForm";
 import { requireAdmin } from "@/lib/auth";
@@ -82,40 +82,7 @@ export default async function AdminPage() {
             <h2>Usuarios</h2>
             <span>{users.length} registrados</span>
           </div>
-          <table className="data-table tight">
-            <thead>
-              <tr>
-                <th>Nombre</th>
-                <th>Usuario</th>
-                <th>Rol</th>
-                <th aria-label="Acciones" />
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((user) => {
-                const isSelf = user.id === admin.id;
-                const isLastAdmin = user.role === "ADMIN" && adminCount <= 1;
-                const canDelete = !isSelf && !isLastAdmin;
-
-                return (
-                  <tr key={user.id}>
-                    <td>{user.displayName}</td>
-                    <td>{user.username}</td>
-                    <td>{user.role}</td>
-                    <td className="table-actions">
-                      {canDelete ? (
-                        <DeleteUserButton userId={user.id} displayName={user.displayName} />
-                      ) : (
-                        <span className="muted table-action-muted">
-                          {isSelf ? "Tu cuenta" : "Unico admin"}
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <AdminUsersPanel users={users} adminId={admin.id} adminCount={adminCount} />
         </div>
       </section>
 

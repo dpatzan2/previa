@@ -569,6 +569,87 @@ input:disabled {
   gap: 4px;
 }
 
+.quiniela-rules-content {
+  padding: 18px;
+  display: grid;
+  gap: 16px;
+}
+
+.quiniela-rules-group h3 {
+  margin: 0 0 10px;
+  color: var(--primary-dark);
+  font-size: 0.82rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.quiniela-rules-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 10px;
+}
+
+.quiniela-rules-list li {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8faf7;
+}
+
+.quiniela-rules-list strong {
+  color: var(--primary-dark);
+  font-size: 0.95rem;
+}
+
+.quiniela-rules-list span {
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.admin-users-cards {
+  display: none;
+  margin: 0;
+  padding: 14px;
+  list-style: none;
+}
+
+.admin-user-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.admin-user-card-main {
+  display: grid;
+  gap: 4px;
+}
+
+.admin-user-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.admin-user-role {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #f0f4ef;
+  color: var(--primary-dark);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
@@ -1375,6 +1456,38 @@ input:disabled {
     gap: 14px;
   }
 
+  .page-header .sync-api-form {
+    max-width: none;
+    width: 100%;
+    justify-items: stretch;
+  }
+
+  .page-header .sync-api-form form,
+  .page-header .sync-api-form .ghost-button {
+    width: 100%;
+  }
+
+  .scoring-rules-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-users-table-wrap {
+    display: none;
+  }
+
+  .admin-users-cards {
+    display: grid;
+    gap: 10px;
+  }
+
+  .admin-user-card .delete-user-action {
+    margin-left: auto;
+  }
+
+  .admin-user-card .form-action-feedback {
+    max-width: none;
+  }
+
   h1 {
     font-size: 2rem;
   }
@@ -1494,10 +1607,15 @@ input:disabled {
   }
 
   .data-table {
-    min-width: 620px;
+    min-width: 0;
+    width: 100%;
   }
 
-  .panel:has(.data-table) {
+  .panel:has(.admin-users-table) {
+    overflow: visible;
+  }
+
+  .panel:has(.data-table:not(.admin-users-table)) {
     overflow-x: auto;
   }
 

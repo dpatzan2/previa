@@ -15,7 +15,6 @@ export default async function LeaderboardPage() {
     .map((user) => ({
       id: user.id,
       name: user.displayName,
-      username: user.username,
       predictions: user.predictions.length,
       points: user.predictions.reduce((sum, prediction) => sum + prediction.points, 0),
     }))
@@ -35,7 +34,6 @@ export default async function LeaderboardPage() {
             <tr>
               <th>#</th>
               <th>Participante</th>
-              <th>Usuario</th>
               <th>Pronosticos</th>
               <th>Puntos</th>
             </tr>
@@ -49,7 +47,6 @@ export default async function LeaderboardPage() {
                     {row.name}
                   </Link>
                 </td>
-                <td>{row.username}</td>
                 <td>{row.predictions}</td>
                 <td>
                   <strong>{row.points}</strong>
