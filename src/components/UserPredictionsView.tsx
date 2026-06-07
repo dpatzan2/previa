@@ -7,7 +7,12 @@ import {
 } from "@/components/MatchScoreboard";
 import { PhaseTabs } from "@/components/PhaseTabs";
 import type { DisplayMatch, DisplayPrediction } from "@/lib/match-ui";
-import { deadlinesByStage, type SerializedPhaseDeadline } from "@/lib/phase-deadlines";
+import {
+  deadlinesByStage,
+  firstEnterableStage,
+  phaseDeadlineBanner,
+  type SerializedPhaseDeadline,
+} from "@/lib/phase-deadlines";
 import { stageLabels } from "@/lib/stages";
 import type { MatchStage } from "@prisma/client";
 
@@ -27,7 +32,9 @@ export function UserPredictionsView({
   phaseDeadlines,
 }: UserPredictionsViewProps) {
   const deadlineMap = deadlinesByStage(phaseDeadlines);
-  const [activeStage, setActiveStage] = useState<MatchStage>(stages[0] ?? "GROUP");
+  const [activeStage, setActiveStage] = useState<MatchStage>(() =>
+    firstEnterableStage(stages, deadlineMap),
+  );
 
   return (
     <div className="prediction-form">
@@ -45,6 +52,7 @@ export function UserPredictionsView({
             return true;
           });
           const deadline = deadlineMap[stage];
+          const banner = deadline ? phaseDeadlineBanner(deadline) : null;
 
           return (
             <section className="panel scoreboard-panel">
@@ -57,25 +65,10 @@ export function UserPredictionsView({
                 <span>{visibleMatches.length} partidos</span>
               </div>
 
-              {deadline ? (
-                <div className={`phase-deadline${deadline.locked ? " closed" : ""}`}>
-                  {deadline.locked ? (
-                    <>
-                      <strong>Fase cerrada</strong>
-                      <span>
-                        El limite de pronosticos fue el {deadline.deadlineLabel}. La fase inicio el{" "}
-                        {deadline.startsLabel}.
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <strong>Limite de pronosticos</strong>
-                      <span>
-                        Hasta el {deadline.deadlineLabel} (hora Guatemala, un dia antes del inicio el{" "}
-                        {deadline.startsLabel}).
-                      </span>
-                    </>
-                  )}
+              {banner ? (
+                <div className={`phase-deadline${banner.closed ? " closed" : ""}`}>
+                  <strong>{banner.title}</strong>
+                  <span>{banner.message}</span>
                 </div>
               ) : null}
 

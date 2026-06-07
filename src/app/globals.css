@@ -732,6 +732,12 @@ input:disabled {
   opacity: 0.72;
 }
 
+.phase-tab.unavailable:not(.active),
+.phase-tab:disabled:not(.active) {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .phase-tab.active,
 .group-tab.active {
   border-color: var(--primary);
@@ -740,7 +746,9 @@ input:disabled {
 }
 
 .phase-tab.active.locked,
-.phase-tab.locked.active {
+.phase-tab.locked.active,
+.phase-tab.active.unavailable,
+.phase-tab.unavailable.active {
   border-color: #c8d2cb;
   background: #f0f2f0;
   color: #5f6761;

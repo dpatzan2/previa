@@ -1,17 +1,21 @@
 "use client";
 
 import { Save } from "lucide-react";
-import { useActionState } from "react";
+import { useActionState, useMemo, useState } from "react";
 import { savePredictionsAction } from "@/app/actions";
 import { FormFeedback, useActionFeedback } from "@/components/FormFeedback";
 import { MatchPickCard } from "@/components/MatchPickCard";
 import { PhaseTabs } from "@/components/PhaseTabs";
 import { SubmitButton } from "@/components/SubmitButton";
 import type { DisplayMatch, DisplayPrediction, PeerPrediction } from "@/lib/match-ui";
-import { deadlinesByStage, type SerializedPhaseDeadline } from "@/lib/phase-deadlines";
+import {
+  deadlinesByStage,
+  firstEnterableStage,
+  phaseDeadlineBanner,
+  type SerializedPhaseDeadline,
+} from "@/lib/phase-deadlines";
 import { stageLabels } from "@/lib/stages";
 import type { MatchStage } from "@prisma/client";
-import { useMemo, useState } from "react";
 
 type PicksFormProps = {
   matches: DisplayMatch[];
@@ -35,7 +39,9 @@ export function PicksForm({
     () => phaseDeadlines.some((item) => !item.locked),
     [phaseDeadlines],
   );
-  const [activeStage, setActiveStage] = useState<MatchStage>(stages[0] ?? "GROUP");
+  const [activeStage, setActiveStage] = useState<MatchStage>(
+    () => firstEnterableStage(stages, deadlinesByStage(phaseDeadlines)),
+  );
   const activePhaseLocked = deadlineMap[activeStage]?.locked ?? false;
   const [saveState, saveAction, isSaving] = useActionState(savePredictionsAction, null);
   const feedback = useActionFeedback(saveState);
@@ -56,6 +62,7 @@ export function PicksForm({
             return true;
           });
           const deadline = deadlineMap[stage];
+          const banner = deadline ? phaseDeadlineBanner(deadline, { editable: true }) : null;
 
           return (
             <section className="panel scoreboard-panel">
@@ -68,25 +75,10 @@ export function PicksForm({
                 <span>{visibleMatches.length} partidos</span>
               </div>
 
-              {deadline ? (
-                <div className={`phase-deadline${deadline.locked ? " closed" : ""}`}>
-                  {deadline.locked ? (
-                    <>
-                      <strong>Fase cerrada · solo lectura</strong>
-                      <span>
-                        Ya no puedes modificar pronosticos de esta fase. El limite fue el{" "}
-                        {deadline.deadlineLabel}.
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <strong>Limite de pronosticos</strong>
-                      <span>
-                        Puedes editar hasta el {deadline.deadlineLabel} (hora Guatemala), un dia
-                        antes del inicio el {deadline.startsLabel}.
-                      </span>
-                    </>
-                  )}
+              {banner ? (
+                <div className={`phase-deadline${banner.closed ? " closed" : ""}`}>
+                  <strong>{banner.title}</strong>
+                  <span>{banner.message}</span>
                 </div>
               ) : null}
 
@@ -118,7 +110,10 @@ export function PicksForm({
           <p className="picks-actions-note closed">Todos los pronosticos estan cerrados.</p>
         ) : activePhaseLocked ? (
           <p className="picks-actions-note">
-            Esta fase ya esta cerrada. Cambia a una fase abierta para guardar cambios.
+            {deadlineMap[activeStage]?.sequentialLocked &&
+            !deadlineMap[activeStage]?.deadlineLocked
+              ? "Esta fase aun no abre. Cambia a una fase disponible para guardar cambios."
+              : "Esta fase ya esta cerrada. Cambia a una fase abierta para guardar cambios."}
           </p>
         ) : null}
         <SubmitButton

@@ -1,9 +1,14 @@
 "use client";
 
 import { Lock } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { MatchStage } from "@prisma/client";
-import type { SerializedPhaseDeadline } from "@/lib/phase-deadlines";
+import {
+  firstEnterableStage,
+  isPhaseTabEnterable,
+  phaseTabStatusLabel,
+  type SerializedPhaseDeadline,
+} from "@/lib/phase-deadlines";
 import { stageLabels, stageOrder } from "@/lib/stages";
 
 type PhaseTabsProps = {
@@ -24,7 +29,8 @@ export function PhaseTabs({
   children,
 }: PhaseTabsProps) {
   const orderedStages = stageOrder.filter((stage) => availableStages.includes(stage));
-  const [internalStage, setInternalStage] = useState<MatchStage>(orderedStages[0] ?? "GROUP");
+  const defaultStage = firstEnterableStage(orderedStages, phaseDeadlines);
+  const [internalStage, setInternalStage] = useState<MatchStage>(defaultStage);
   const activeStage = controlledStage ?? internalStage;
   const [activeGroup, setActiveGroup] = useState<string>(groupCodes[0] ?? "A");
 
@@ -33,6 +39,15 @@ export function PhaseTabs({
     else setInternalStage(stage);
   };
 
+  useEffect(() => {
+    if (isPhaseTabEnterable(phaseDeadlines?.[activeStage])) return;
+
+    const fallback = firstEnterableStage(orderedStages, phaseDeadlines);
+    if (fallback !== activeStage) {
+      setActiveStage(fallback);
+    }
+  }, [activeStage, orderedStages, phaseDeadlines]);
+
   const activeGroupCode = activeStage === "GROUP" ? activeGroup : null;
 
   return (
@@ -40,31 +55,41 @@ export function PhaseTabs({
       <div className="phase-tabs" role="tablist" aria-label="Fases del torneo">
         {orderedStages.map((stage) => {
           const deadline = phaseDeadlines?.[stage];
+          const isClosed = deadline?.deadlineLocked ?? false;
+          const isUnavailable = !isPhaseTabEnterable(deadline);
+
           return (
             <button
               key={stage}
               type="button"
               role="tab"
               aria-selected={activeStage === stage}
+              aria-disabled={isUnavailable}
+              disabled={isUnavailable}
               className={
                 activeStage === stage
                   ? deadline?.locked
-                    ? "phase-tab active locked"
+                    ? isUnavailable
+                      ? "phase-tab active unavailable"
+                      : "phase-tab active locked"
                     : "phase-tab active"
                   : deadline?.locked
-                    ? "phase-tab locked"
+                    ? isUnavailable
+                      ? "phase-tab unavailable"
+                      : "phase-tab locked"
                     : "phase-tab"
               }
-              onClick={() => setActiveStage(stage)}
+              onClick={() => {
+                if (isUnavailable) return;
+                setActiveStage(stage);
+              }}
             >
               <span className="phase-tab-label">
                 {stageLabels[stage]}
-                {deadline?.locked ? <Lock size={13} aria-hidden="true" /> : null}
+                {isClosed ? <Lock size={13} aria-hidden="true" /> : null}
               </span>
               {deadline ? (
-                <small className="phase-tab-deadline">
-                  {deadline.locked ? "Cerrada" : `Hasta ${deadline.deadlineLabel} GT`}
-                </small>
+                <small className="phase-tab-deadline">{phaseTabStatusLabel(deadline)}</small>
               ) : null}
             </button>
           );
