@@ -61,7 +61,7 @@ export function ScoringSettingsForm({ rules }: { rules: ScoringRules }) {
           </fieldset>
         </div>
         <ul className="scoring-rules-note muted">
-          <li>Marcador exacto: mismo resultado y mismo ganador o empate.</li>
+          <li>Marcador exacto: aciertas ambos goles del partido.</li>
           <li>
             Solo ganador o empate: acierta local, visitante o empate aunque el marcador no
             coincida (ej. pronostico 0-0 y resultado 1-1).

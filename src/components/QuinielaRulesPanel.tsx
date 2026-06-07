@@ -14,8 +14,8 @@ export function QuinielaRulesPanel({ rules }: { rules: ScoringRules }) {
             <li>
               <strong>{rules.groupExactPoints} pts</strong>
               <span>
-                Marcador exacto: coincide el resultado y el ganador o empate (ej. pronostico 1-2 y
-                resultado 1-2).
+                Marcador exacto: aciertas ambos goles del partido (ej. pronostico 1-2 y resultado
+                1-2).
               </span>
             </li>
             <li>
