@@ -1,13 +1,17 @@
 import "server-only";
 
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import bcrypt from "bcryptjs";
 import crypto from "node:crypto";
 import { prisma } from "@/lib/db";
 import { canParticipateInPool } from "@/lib/participants";
+import {
+  loginRedirectUrl,
+  safeRedirectPath,
+  SESSION_COOKIE_NAME,
+} from "@/lib/session-cookie";
 
-const cookieName = "mundial_session";
 const sessionDays = 14;
 
 function hashToken(token: string) {
@@ -32,7 +36,7 @@ export async function signIn(username: string, password: string) {
   });
 
   const store = await cookies();
-  store.set(cookieName, token, {
+  store.set(SESSION_COOKIE_NAME, token, {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
@@ -45,16 +49,16 @@ export async function signIn(username: string, password: string) {
 
 export async function signOut() {
   const store = await cookies();
-  const token = store.get(cookieName)?.value;
+  const token = store.get(SESSION_COOKIE_NAME)?.value;
   if (token) {
     await prisma.session.deleteMany({ where: { tokenHash: hashToken(token) } });
   }
-  store.delete(cookieName);
+  store.delete(SESSION_COOKIE_NAME);
 }
 
 export async function getCurrentUser() {
   const store = await cookies();
-  const token = store.get(cookieName)?.value;
+  const token = store.get(SESSION_COOKIE_NAME)?.value;
   if (!token) return null;
 
   const session = await prisma.session.findUnique({
@@ -66,7 +70,7 @@ export async function getCurrentUser() {
     if (session) {
       await prisma.session.delete({ where: { id: session.id } }).catch(() => {});
     }
-    store.delete(cookieName);
+    store.delete(SESSION_COOKIE_NAME);
     return null;
   }
 
@@ -75,7 +79,10 @@ export async function getCurrentUser() {
 
 export async function requireUser() {
   const user = await getCurrentUser();
-  if (!user) redirect("/login");
+  if (!user) {
+    const pathname = (await headers()).get("x-pathname") ?? "/dashboard";
+    redirect(loginRedirectUrl(pathname, "expired"));
+  }
   return user;
 }
 

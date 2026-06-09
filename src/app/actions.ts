@@ -3,7 +3,7 @@
 import { Role, type PickSide } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 import { z } from "zod";
 import { signIn, signOut, requireAdmin, requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
@@ -13,6 +13,7 @@ import { scorePrediction } from "@/lib/scoring";
 import { getScoringRules, SCORING_SETTINGS_ID } from "@/lib/scoring-settings";
 import { syncWc2026Matches } from "@/lib/wc2026";
 import type { ActionFeedbackState } from "@/lib/form-action-state";
+import { safeRedirectPath } from "@/lib/session-cookie";
 
 function readInt(value: FormDataEntryValue | null) {
   if (typeof value !== "string" || value.trim() === "") return null;
@@ -25,11 +26,12 @@ export type SavePredictionsState = ActionFeedbackState;
 export async function loginAction(formData: FormData) {
   const username = String(formData.get("username") ?? "").trim();
   const password = String(formData.get("password") ?? "");
+  const next = safeRedirectPath(String(formData.get("next") ?? ""));
   const ok = await signIn(username, password);
   if (!ok) {
-    redirect("/login?error=1");
+    redirect(`/login?error=1&next=${encodeURIComponent(next)}`);
   }
-  redirect("/dashboard");
+  redirect(next);
 }
 
 export async function registerAction(formData: FormData) {
@@ -148,6 +150,7 @@ export async function savePredictionsAction(
       message: "Pronosticos guardados correctamente.",
     };
   } catch (error) {
+    unstable_rethrow(error);
     console.error("savePredictionsAction failed", error);
     return {
       ok: false,
@@ -211,6 +214,7 @@ export async function createUserAction(
       message: "Usuario creado correctamente.",
     };
   } catch (error) {
+    unstable_rethrow(error);
     console.error("createUserAction failed", error);
     return {
       ok: false,
@@ -270,6 +274,7 @@ export async function deleteUserAction(
       message: `${target.displayName} fue eliminado.`,
     };
   } catch (error) {
+    unstable_rethrow(error);
     console.error("deleteUserAction failed", error);
     return {
       ok: false,
@@ -334,6 +339,7 @@ export async function saveResultsAction(
       message: "Resultados guardados correctamente.",
     };
   } catch (error) {
+    unstable_rethrow(error);
     console.error("saveResultsAction failed", error);
     return {
       ok: false,
@@ -358,6 +364,7 @@ export async function syncWc2026Action(
       message: "Partidos sincronizados desde la API.",
     };
   } catch (error) {
+    unstable_rethrow(error);
     console.error("syncWc2026Action failed", error);
     return {
       ok: false,
@@ -420,6 +427,7 @@ export async function saveScoringSettingsAction(
       message: "Reglas de puntuacion guardadas correctamente.",
     };
   } catch (error) {
+    unstable_rethrow(error);
     console.error("saveScoringSettingsAction failed", error);
     return {
       ok: false,
