@@ -11,6 +11,7 @@ export type PhaseDeadlineInfo = {
   locked: boolean;
   deadlineLocked: boolean;
   sequentialLocked: boolean;
+  phaseStarted: boolean;
   previousStage: MatchStage | null;
   deadlineLabel: string;
   startsLabel: string;
@@ -23,6 +24,7 @@ export type SerializedPhaseDeadline = {
   locked: boolean;
   deadlineLocked: boolean;
   sequentialLocked: boolean;
+  phaseStarted: boolean;
   previousStage: MatchStage | null;
   deadlineLabel: string;
   startsLabel: string;
@@ -66,6 +68,7 @@ export function computePhaseDeadlines(
     const sequentialLocked = previousStage
       ? !isStageComplete(matches, previousStage)
       : false;
+    const phaseStarted = now >= startsAt;
 
     deadlines.set(stage, {
       stage,
@@ -73,6 +76,7 @@ export function computePhaseDeadlines(
       deadlineAt,
       deadlineLocked,
       sequentialLocked,
+      phaseStarted,
       locked: deadlineLocked || sequentialLocked,
       previousStage,
       deadlineLabel: formatAppDateTime(deadlineAt),
@@ -81,6 +85,24 @@ export function computePhaseDeadlines(
   }
 
   return deadlines;
+}
+
+export function isPhaseStarted(deadline?: SerializedPhaseDeadline | PhaseDeadlineInfo) {
+  if (!deadline) return false;
+  return deadline.phaseStarted;
+}
+
+export function canViewPeerPredictions(deadline?: SerializedPhaseDeadline | PhaseDeadlineInfo) {
+  return isPhaseStarted(deadline);
+}
+
+export function phasePeerVisibilityBanner(deadline: SerializedPhaseDeadline) {
+  if (canViewPeerPredictions(deadline)) return null;
+
+  return {
+    title: "Pronosticos ocultos",
+    message: `Estos pronosticos se podran ver cuando inicie la fase, el ${deadline.startsLabel} (hora Guatemala).`,
+  };
 }
 
 export function isPhaseTabEnterable(deadline?: SerializedPhaseDeadline | PhaseDeadlineInfo) {
@@ -163,6 +185,7 @@ export function serializePhaseDeadlines(
     locked: item.locked,
     deadlineLocked: item.deadlineLocked,
     sequentialLocked: item.sequentialLocked,
+    phaseStarted: item.phaseStarted,
     previousStage: item.previousStage,
     deadlineLabel: item.deadlineLabel,
     startsLabel: item.startsLabel,

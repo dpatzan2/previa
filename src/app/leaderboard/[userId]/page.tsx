@@ -8,6 +8,7 @@ import { teamName, withGuatemalaSchedule } from "@/lib/match-ui";
 import { participantWhere } from "@/lib/participants";
 import {
   computePhaseDeadlines,
+  canViewPeerPredictions,
   isPhaseLockedForPicks,
   serializePhaseDeadlines,
 } from "@/lib/phase-deadlines";
@@ -40,15 +41,21 @@ export default async function UserPredictionsPage({
 
   const phaseDeadlines = computePhaseDeadlines(matches);
   const predictionMap = Object.fromEntries(
-    predictions.map((item) => [
-      item.matchId,
-      {
-        predictedHomeScore: item.predictedHomeScore,
-        predictedAwayScore: item.predictedAwayScore,
-        predictedWinnerSide: item.predictedWinnerSide,
-        points: item.points,
-      },
-    ]),
+    predictions
+      .filter((item) => {
+        const match = matches.find((entry) => entry.id === item.matchId);
+        if (!match) return false;
+        return canViewPeerPredictions(phaseDeadlines.get(match.stage));
+      })
+      .map((item) => [
+        item.matchId,
+        {
+          predictedHomeScore: item.predictedHomeScore,
+          predictedAwayScore: item.predictedAwayScore,
+          predictedWinnerSide: item.predictedWinnerSide,
+          points: item.points,
+        },
+      ]),
   );
 
   const displayMatches = matches.map((match) =>

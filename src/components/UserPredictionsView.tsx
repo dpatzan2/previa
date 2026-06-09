@@ -8,9 +8,11 @@ import {
 import { PhaseTabs } from "@/components/PhaseTabs";
 import type { DisplayMatch, DisplayPrediction } from "@/lib/match-ui";
 import {
+  canViewPeerPredictions,
   deadlinesByStage,
   firstEnterableStage,
   phaseDeadlineBanner,
+  phasePeerVisibilityBanner,
   type SerializedPhaseDeadline,
 } from "@/lib/phase-deadlines";
 import { stageLabels } from "@/lib/stages";
@@ -53,6 +55,8 @@ export function UserPredictionsView({
           });
           const deadline = deadlineMap[stage];
           const banner = deadline ? phaseDeadlineBanner(deadline) : null;
+          const peerBanner = deadline ? phasePeerVisibilityBanner(deadline) : null;
+          const picksVisible = canViewPeerPredictions(deadline);
 
           return (
             <section className="panel scoreboard-panel">
@@ -65,7 +69,14 @@ export function UserPredictionsView({
                 <span>{visibleMatches.length} partidos</span>
               </div>
 
-              {banner ? (
+              {peerBanner ? (
+                <div className="phase-deadline closed">
+                  <strong>{peerBanner.title}</strong>
+                  <span>{peerBanner.message}</span>
+                </div>
+              ) : null}
+
+              {banner && picksVisible ? (
                 <div className={`phase-deadline${banner.closed ? " closed" : ""}`}>
                   <strong>{banner.title}</strong>
                   <span>{banner.message}</span>
@@ -77,13 +88,14 @@ export function UserPredictionsView({
                   const isVisible =
                     match.stage === stage &&
                     (stage !== "GROUP" || match.groupCode === groupCode);
-                  const prediction = predictions[match.id];
+                  const prediction = picksVisible ? predictions[match.id] : undefined;
 
                   return match.stage === "GROUP" ? (
                     <GroupMatchScoreboard
                       key={match.id}
                       match={match}
                       prediction={prediction}
+                      predictionHidden={!picksVisible}
                       hidden={!isVisible}
                       readOnly
                     />
@@ -92,6 +104,7 @@ export function UserPredictionsView({
                       key={match.id}
                       match={match}
                       prediction={prediction}
+                      predictionHidden={!picksVisible}
                       hidden={!isVisible}
                       readOnly
                     />

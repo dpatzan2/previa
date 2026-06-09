@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { teamName, withGuatemalaSchedule } from "@/lib/match-ui";
 import type { PeerPrediction } from "@/lib/match-ui";
 import {
+  canViewPeerPredictions,
   computePhaseDeadlines,
   isPhaseLockedForPicks,
   serializePhaseDeadlines,
@@ -34,6 +35,7 @@ export default async function PicksPage() {
   ]);
 
   const phaseDeadlines = computePhaseDeadlines(matches);
+  const matchById = new Map(matches.map((match) => [match.id, match]));
   const predictionMap = Object.fromEntries(
     predictions.map((item) => [
       item.matchId,
@@ -48,6 +50,12 @@ export default async function PicksPage() {
 
   const peersByMatch: Record<string, PeerPrediction[]> = {};
   for (const item of peerPredictions) {
+    const match = matchById.get(item.matchId);
+    if (!match) continue;
+
+    const deadline = phaseDeadlines.get(match.stage);
+    if (!canViewPeerPredictions(deadline)) continue;
+
     const peer: PeerPrediction = {
       userId: item.userId,
       displayName: item.user.displayName,

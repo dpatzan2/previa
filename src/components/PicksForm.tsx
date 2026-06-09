@@ -9,6 +9,7 @@ import { PhaseTabs } from "@/components/PhaseTabs";
 import { SubmitButton } from "@/components/SubmitButton";
 import type { DisplayMatch, DisplayPrediction, PeerPrediction } from "@/lib/match-ui";
 import {
+  canViewPeerPredictions,
   deadlinesByStage,
   firstEnterableStage,
   phaseDeadlineBanner,
@@ -87,6 +88,7 @@ export function PicksForm({
                   const isVisible =
                     match.stage === stage && (stage !== "GROUP" || match.groupCode === groupCode);
                   const prediction = predictions[match.id];
+                  const deadline = deadlineMap[match.stage];
 
                   return (
                     <MatchPickCard
@@ -94,6 +96,8 @@ export function PicksForm({
                       match={match}
                       prediction={prediction}
                       peers={peersByMatch[match.id] ?? []}
+                      peerPicksVisible={canViewPeerPredictions(deadline)}
+                      phaseStartsLabel={deadline?.startsLabel}
                       hidden={!isVisible}
                     />
                   );

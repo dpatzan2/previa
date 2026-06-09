@@ -12,18 +12,20 @@ export function GroupMatchScoreboard({
   hidden = false,
   readOnly = false,
   nested = false,
+  predictionHidden = false,
 }: {
   match: DisplayMatch;
   prediction?: DisplayPrediction;
   hidden?: boolean;
   readOnly?: boolean;
   nested?: boolean;
+  predictionHidden?: boolean;
 }) {
   const displayOnly = readOnly || match.locked;
 
   return (
     <article
-      className={`scoreboard-card${displayOnly ? " locked" : ""}${nested ? " nested" : ""}${hidden ? " is-hidden" : ""}`}
+      className={`scoreboard-card${displayOnly ? " locked" : ""}${nested ? " nested" : ""}${hidden ? " is-hidden" : ""}${predictionHidden ? " prediction-hidden-card" : ""}`}
       aria-hidden={hidden}
     >
       <header className="scoreboard-head">
@@ -39,7 +41,9 @@ export function GroupMatchScoreboard({
               Cerrado
             </span>
           ) : null}
-          <span className="points-pill">{prediction?.points ?? 0} pts</span>
+          {!predictionHidden ? (
+            <span className="points-pill">{prediction?.points ?? 0} pts</span>
+          ) : null}
         </div>
       </header>
 
@@ -52,7 +56,12 @@ export function GroupMatchScoreboard({
           <TeamLabel name={match.home} />
         </div>
 
-        {displayOnly ? (
+        {predictionHidden ? (
+          <div className="scoreboard-center readonly prediction-hidden">
+            <Lock size={16} aria-hidden="true" />
+            <span>Oculto</span>
+          </div>
+        ) : displayOnly ? (
           <div className="scoreboard-center readonly" aria-label="Marcador registrado">
             <span className="scoreboard-score">{scoreText(prediction?.predictedHomeScore)}</span>
             <span className="scoreboard-sep">:</span>
@@ -94,12 +103,14 @@ export function KnockoutMatchScoreboard({
   hidden = false,
   readOnly = false,
   nested = false,
+  predictionHidden = false,
 }: {
   match: DisplayMatch;
   prediction?: DisplayPrediction;
   hidden?: boolean;
   readOnly?: boolean;
   nested?: boolean;
+  predictionHidden?: boolean;
 }) {
   const pickedHome = prediction?.predictedWinnerSide === "HOME";
   const pickedAway = prediction?.predictedWinnerSide === "AWAY";
@@ -107,7 +118,7 @@ export function KnockoutMatchScoreboard({
 
   return (
     <article
-      className={`scoreboard-card knockout${displayOnly ? " locked" : ""}${nested ? " nested" : ""}${hidden ? " is-hidden" : ""}`}
+      className={`scoreboard-card knockout${displayOnly ? " locked" : ""}${nested ? " nested" : ""}${hidden ? " is-hidden" : ""}${predictionHidden ? " prediction-hidden-card" : ""}`}
       aria-hidden={hidden}
     >
       <header className="scoreboard-head">
@@ -123,7 +134,9 @@ export function KnockoutMatchScoreboard({
               Cerrado
             </span>
           ) : null}
-          <span className="points-pill">{prediction?.points ?? 0} pts</span>
+          {!predictionHidden ? (
+            <span className="points-pill">{prediction?.points ?? 0} pts</span>
+          ) : null}
         </div>
       </header>
 
@@ -131,7 +144,14 @@ export function KnockoutMatchScoreboard({
         <p className="scoreboard-venue">{match.venueShort ?? match.venue}</p>
       ) : null}
 
-      {displayOnly ? (
+      {predictionHidden ? (
+        <div className="knockout-pick-grid readonly-grid prediction-hidden-grid">
+          <div className="prediction-hidden knockout-hidden-message">
+            <Lock size={16} aria-hidden="true" />
+            <span>Pronostico oculto hasta inicio de fase</span>
+          </div>
+        </div>
+      ) : displayOnly ? (
         <div className="knockout-pick-grid readonly-grid">
           <div className={`knockout-option-body static${pickedHome ? " selected" : ""}`}>
             <TeamLabel name={match.home} />
