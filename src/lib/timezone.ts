@@ -24,6 +24,26 @@ export function formatAppDateTime(date: Date) {
   }).format(date);
 }
 
+export function atAppDay22Hours(date: Date) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: APP_TIMEZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+
+  const value = (type: "year" | "month" | "day") =>
+    parts.find((part) => part.type === type)?.value;
+
+  const appDay22Hours = parseAppDateTime(
+    `${value("year")}-${value("month")}-${value("day")}T22:00:00`,
+  );
+  if (!appDay22Hours) {
+    throw new Error("Could not build app 22:00 date");
+  }
+  return appDay22Hours;
+}
+
 export function formatAppTime(date: Date) {
   return new Intl.DateTimeFormat(APP_LOCALE, {
     timeZone: APP_TIMEZONE,

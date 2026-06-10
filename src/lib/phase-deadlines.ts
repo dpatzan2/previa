@@ -1,5 +1,5 @@
 import type { MatchStage, MatchStatus } from "@prisma/client";
-import { formatAppDateTime } from "@/lib/timezone";
+import { atAppDay22Hours, formatAppDateTime } from "@/lib/timezone";
 import { previousStageForUnlock, stageLabels } from "@/lib/stages";
 
 const MS_DAY = 24 * 60 * 60 * 1000;
@@ -8,26 +8,30 @@ export type PhaseDeadlineInfo = {
   stage: MatchStage;
   startsAt: Date;
   deadlineAt: Date;
+  peerVisibilityAt: Date;
   locked: boolean;
   deadlineLocked: boolean;
   sequentialLocked: boolean;
-  phaseStarted: boolean;
+  peerPredictionsVisible: boolean;
   previousStage: MatchStage | null;
   deadlineLabel: string;
   startsLabel: string;
+  peerVisibilityLabel: string;
 };
 
 export type SerializedPhaseDeadline = {
   stage: MatchStage;
   deadlineAt: string;
   startsAt: string;
+  peerVisibilityAt: string;
   locked: boolean;
   deadlineLocked: boolean;
   sequentialLocked: boolean;
-  phaseStarted: boolean;
+  peerPredictionsVisible: boolean;
   previousStage: MatchStage | null;
   deadlineLabel: string;
   startsLabel: string;
+  peerVisibilityLabel: string;
 };
 
 type MatchForPhaseDeadlines = {
@@ -62,38 +66,41 @@ export function computePhaseDeadlines(
   const deadlines = new Map<MatchStage, PhaseDeadlineInfo>();
 
   for (const [stage, startsAt] of firstKickoffByStage) {
-    const deadlineAt = new Date(startsAt.getTime() - MS_DAY);
+    const deadlineAt = atAppDay22Hours(new Date(startsAt.getTime() - MS_DAY));
+    const peerVisibilityAt = atAppDay22Hours(startsAt);
     const deadlineLocked = now >= deadlineAt;
     const previousStage = previousStageForUnlock(stage);
     const sequentialLocked = previousStage
       ? !isStageComplete(matches, previousStage)
       : false;
-    const phaseStarted = now >= startsAt;
+    const peerPredictionsVisible = now >= peerVisibilityAt;
 
     deadlines.set(stage, {
       stage,
       startsAt,
       deadlineAt,
+      peerVisibilityAt,
       deadlineLocked,
       sequentialLocked,
-      phaseStarted,
+      peerPredictionsVisible,
       locked: deadlineLocked || sequentialLocked,
       previousStage,
       deadlineLabel: formatAppDateTime(deadlineAt),
       startsLabel: formatAppDateTime(startsAt),
+      peerVisibilityLabel: formatAppDateTime(peerVisibilityAt),
     });
   }
 
   return deadlines;
 }
 
-export function isPhaseStarted(deadline?: SerializedPhaseDeadline | PhaseDeadlineInfo) {
+export function arePeerPredictionsVisible(deadline?: SerializedPhaseDeadline | PhaseDeadlineInfo) {
   if (!deadline) return false;
-  return deadline.phaseStarted;
+  return deadline.peerPredictionsVisible;
 }
 
 export function canViewPeerPredictions(deadline?: SerializedPhaseDeadline | PhaseDeadlineInfo) {
-  return isPhaseStarted(deadline);
+  return arePeerPredictionsVisible(deadline);
 }
 
 export function phasePeerVisibilityBanner(deadline: SerializedPhaseDeadline) {
@@ -101,7 +108,7 @@ export function phasePeerVisibilityBanner(deadline: SerializedPhaseDeadline) {
 
   return {
     title: "Pronosticos ocultos",
-    message: `Estos pronosticos se podran ver cuando inicie la fase, el ${deadline.startsLabel} (hora Guatemala).`,
+    message: `Estos pronosticos se podran ver el ${deadline.peerVisibilityLabel} (hora Guatemala).`,
   };
 }
 
@@ -182,13 +189,15 @@ export function serializePhaseDeadlines(
     stage: item.stage,
     deadlineAt: item.deadlineAt.toISOString(),
     startsAt: item.startsAt.toISOString(),
+    peerVisibilityAt: item.peerVisibilityAt.toISOString(),
     locked: item.locked,
     deadlineLocked: item.deadlineLocked,
     sequentialLocked: item.sequentialLocked,
-    phaseStarted: item.phaseStarted,
+    peerPredictionsVisible: item.peerPredictionsVisible,
     previousStage: item.previousStage,
     deadlineLabel: item.deadlineLabel,
     startsLabel: item.startsLabel,
+    peerVisibilityLabel: item.peerVisibilityLabel,
   }));
 }
 
