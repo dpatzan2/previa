@@ -4,6 +4,7 @@ import json
 from datetime import datetime, time
 from pathlib import Path
 from unicodedata import normalize
+from zoneinfo import ZoneInfo
 
 from openpyxl import load_workbook
 from openpyxl.utils.cell import range_boundaries
@@ -11,6 +12,31 @@ from openpyxl.utils.cell import range_boundaries
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = Path.home() / "Downloads" / "Fixture-Copa-Mundial-FIFA-2026_ClasesExcel.xlsx"
 OUT = ROOT / "prisma" / "fixture-data.json"
+SOURCE_TIMEZONE = ZoneInfo("America/New_York")
+APP_TIMEZONE = ZoneInfo("America/Guatemala")
+WEEKDAYS_ES = [
+    "Lunes",
+    "Martes",
+    "Miércoles",
+    "Jueves",
+    "Viernes",
+    "Sábado",
+    "Domingo",
+]
+MONTHS_ES = [
+    "enero",
+    "febrero",
+    "marzo",
+    "abril",
+    "mayo",
+    "junio",
+    "julio",
+    "agosto",
+    "septiembre",
+    "octubre",
+    "noviembre",
+    "diciembre",
+]
 
 
 def clean(value):
@@ -42,16 +68,41 @@ def stage_for(match_number: int) -> str:
     return "FINAL"
 
 
-def as_iso(date_value, time_value):
+def as_guatemala_datetime(date_value, time_value):
     if not isinstance(date_value, datetime):
         return None
     hour = minute = 0
     if isinstance(time_value, time):
         hour = time_value.hour
         minute = time_value.minute
-    return datetime(date_value.year, date_value.month, date_value.day, hour, minute).strftime(
-        "%Y-%m-%dT%H:%M:%S-06:00"
+    source_datetime = datetime(
+        date_value.year,
+        date_value.month,
+        date_value.day,
+        hour,
+        minute,
+        tzinfo=SOURCE_TIMEZONE,
     )
+    return source_datetime.astimezone(APP_TIMEZONE)
+
+
+def as_iso(date_value, time_value):
+    guatemala_datetime = as_guatemala_datetime(date_value, time_value)
+    if not guatemala_datetime:
+        return None
+    return guatemala_datetime.strftime("%Y-%m-%dT%H:%M:%S-06:00")
+
+
+def date_label(value):
+    if not value:
+        return None
+    return f"{WEEKDAYS_ES[value.weekday()]} {value.day:02d} {MONTHS_ES[value.month - 1]}"
+
+
+def time_label(value):
+    if not value:
+        return None
+    return value.strftime("%H:%M")
 
 
 def main():
@@ -82,16 +133,17 @@ def main():
             if isinstance(team, str) and team:
                 teams[normalize_team(team)] = {"name": team, "groupCode": group_code}
 
+        guatemala_datetime = as_guatemala_datetime(record.get("FECHA"), record.get("HORA"))
         matches.append(
             {
                 "matchNumber": number,
                 "stage": stage_for(number),
                 "groupCode": group_code,
-                "dateLabel": record.get("FECHA LARGA"),
-                "timeLabel": record.get("HORA").strftime("%H:%M")
-                if isinstance(record.get("HORA"), time)
+                "dateLabel": date_label(guatemala_datetime),
+                "timeLabel": time_label(guatemala_datetime),
+                "kickoffAt": guatemala_datetime.strftime("%Y-%m-%dT%H:%M:%S-06:00")
+                if guatemala_datetime
                 else None,
-                "kickoffAt": as_iso(record.get("FECHA"), record.get("HORA")),
                 "venue": record.get("ESTADIO"),
                 "venueShort": record.get("ESTADIO ABREV."),
                 "homeTeam": home if isinstance(home, str) and home else None,

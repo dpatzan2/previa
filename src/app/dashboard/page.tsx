@@ -1,4 +1,5 @@
-import { CalendarClock, CheckCircle2, Medal, Shield, Users } from "lucide-react";
+import { CheckCircle2, Medal, Shield, Users } from "lucide-react";
+import { NextMatchMetric } from "@/components/NextMatchMetric";
 import { QuinielaRulesPanel } from "@/components/QuinielaRulesPanel";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
@@ -11,7 +12,10 @@ export default async function DashboardPage() {
   const isManagerOnly = isNonParticipatingAdmin(user);
 
   const [matches, participantCount, mine, scoringRules] = await Promise.all([
-    prisma.match.findMany({ orderBy: { matchNumber: "asc" } }),
+    prisma.match.findMany({
+      include: { homeTeam: true, awayTeam: true },
+      orderBy: { matchNumber: "asc" },
+    }),
     prisma.user.count({ where: participantWhere }),
     user.canParticipate
       ? prisma.prediction.findMany({ where: { userId: user.id } })
@@ -21,7 +25,15 @@ export default async function DashboardPage() {
 
   const finished = matches.filter((match) => match.status === "FINISHED").length;
   const points = mine.reduce((sum, item) => sum + item.points, 0);
-  const nextMatch = matches.find((match) => match.kickoffAt && match.kickoffAt > new Date());
+  const nextMatch =
+    matches
+      .filter(
+        (match) =>
+          match.kickoffAt &&
+          match.kickoffAt > new Date() &&
+          match.status !== "FINISHED",
+      )
+      .sort((a, b) => a.kickoffAt!.getTime() - b.kickoffAt!.getTime())[0] ?? null;
 
   return (
     <div className="page">
@@ -47,11 +59,7 @@ export default async function DashboardPage() {
         )}
         <Metric icon={<CheckCircle2 size={20} />} label="Partidos cerrados" value={`${finished}/104`} />
         <Metric icon={<Users size={20} />} label="Participantes" value={participantCount} />
-        <Metric
-          icon={<CalendarClock size={20} />}
-          label="Siguiente partido"
-          value={nextMatch ? `P${nextMatch.matchNumber}` : "Sin fecha"}
-        />
+        <NextMatchMetric match={nextMatch} />
       </section>
 
       <section className="two-column">

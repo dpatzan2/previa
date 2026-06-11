@@ -1,5 +1,6 @@
 export const APP_TIMEZONE = "America/Guatemala";
 export const APP_LOCALE = "es-GT";
+export const APP_TIMEZONE_LABEL = "GT";
 
 /** Interpreta fechas del fixture como hora local de Guatemala cuando no traen zona. */
 export function parseAppDateTime(value: string | null | undefined) {
@@ -53,6 +54,14 @@ export function formatAppTime(date: Date) {
   }).format(date);
 }
 
+function formatTimeZoneLabel(timeLabel: string | null | undefined) {
+  if (!timeLabel) return null;
+  if (/\b(GT|CA|Centroamerica|Centroamérica)\b/i.test(timeLabel)) {
+    return timeLabel;
+  }
+  return `${timeLabel} ${APP_TIMEZONE_LABEL}`;
+}
+
 export function formatAppDate(date: Date) {
   return new Intl.DateTimeFormat(APP_LOCALE, {
     timeZone: APP_TIMEZONE,
@@ -69,11 +78,11 @@ export function matchScheduleLabels(
   timeLabel: string | null | undefined,
 ) {
   if (!kickoffAt) {
-    return { dateLabel: dateLabel ?? null, timeLabel: timeLabel ?? null };
+    return { dateLabel: dateLabel ?? null, timeLabel: formatTimeZoneLabel(timeLabel) };
   }
 
   return {
     dateLabel: formatAppDate(kickoffAt),
-    timeLabel: formatAppTime(kickoffAt),
+    timeLabel: formatTimeZoneLabel(formatAppTime(kickoffAt)),
   };
 }
