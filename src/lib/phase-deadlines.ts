@@ -67,7 +67,7 @@ export function computePhaseDeadlines(
 
   for (const [stage, startsAt] of firstKickoffByStage) {
     const deadlineAt = atAppDay22Hours(new Date(startsAt.getTime() - MS_DAY));
-    const peerVisibilityAt = atAppDay22Hours(startsAt);
+    const peerVisibilityAt = deadlineAt;
     const deadlineLocked = now >= deadlineAt;
     const previousStage = previousStageForUnlock(stage);
     const sequentialLocked = previousStage
