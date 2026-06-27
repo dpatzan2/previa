@@ -13,6 +13,7 @@ export type DisplayMatch = {
   venueShort: string | null;
   locked: boolean;
   peerPicksVisible?: boolean;
+  pickDeadlineLabel?: string | null;
   home: string;
   away: string;
   homeTeamId: string | null;

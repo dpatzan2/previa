@@ -50,6 +50,9 @@ export function GroupMatchScoreboard({
       {(match.venueShort ?? match.venue) ? (
         <p className="scoreboard-venue">{match.venueShort ?? match.venue}</p>
       ) : null}
+      {match.stage !== "GROUP" && match.pickDeadlineLabel ? (
+        <p className="scoreboard-deadline">Limite: {match.pickDeadlineLabel}</p>
+      ) : null}
 
       <div className="scoreboard-body">
         <div className="scoreboard-side home">
@@ -143,6 +146,7 @@ export function KnockoutMatchScoreboard({
       {(match.venueShort ?? match.venue) ? (
         <p className="scoreboard-venue">{match.venueShort ?? match.venue}</p>
       ) : null}
+      {match.pickDeadlineLabel ? <p className="scoreboard-deadline">Limite: {match.pickDeadlineLabel}</p> : null}
 
       {predictionHidden ? (
         <div className="knockout-pick-grid readonly-grid prediction-hidden-grid">

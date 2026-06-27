@@ -10,8 +10,10 @@ import {
   computePhaseDeadlines,
   canViewPeerPredictionsForMatch,
   isMatchLockedForPicks,
+  matchDeadlineAt,
   serializePhaseDeadlines,
 } from "@/lib/phase-deadlines";
+import { formatAppDateTime } from "@/lib/timezone";
 import { stageOrder } from "@/lib/stages";
 import type { MatchStage } from "@prisma/client";
 
@@ -58,8 +60,9 @@ export default async function UserPredictionsPage({
       ]),
   );
 
-  const displayMatches = matches.map((match) =>
-    withGuatemalaSchedule({
+  const displayMatches = matches.map((match) => {
+    const pickDeadline = matchDeadlineAt(match);
+    return withGuatemalaSchedule({
       id: match.id,
       matchNumber: match.matchNumber,
       stage: match.stage,
@@ -71,6 +74,7 @@ export default async function UserPredictionsPage({
       venueShort: match.venueShort,
       locked: isMatchLockedForPicks(match, phaseDeadlines),
       peerPicksVisible: canViewPeerPredictionsForMatch(match, phaseDeadlines),
+      pickDeadlineLabel: match.stage === "GROUP" || !pickDeadline ? null : formatAppDateTime(pickDeadline),
       home: teamName(match.homeTeam, match.homePlaceholder, "Local"),
       away: teamName(match.awayTeam, match.awayPlaceholder, "Visitante"),
       homeTeamId: match.homeTeamId,
@@ -78,8 +82,8 @@ export default async function UserPredictionsPage({
       homeScore: match.homeScore,
       awayScore: match.awayScore,
       actualWinnerSide: match.actualWinnerSide,
-    }),
-  );
+    });
+  });
 
   const groupCodes = Array.from(
     new Set(

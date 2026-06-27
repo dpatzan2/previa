@@ -7,8 +7,10 @@ import {
   canViewPeerPredictionsForMatch,
   computePhaseDeadlines,
   isMatchLockedForPicks,
+  matchDeadlineAt,
   serializePhaseDeadlines,
 } from "@/lib/phase-deadlines";
+import { formatAppDateTime } from "@/lib/timezone";
 import { participantWhere } from "@/lib/participants";
 import { stageOrder } from "@/lib/stages";
 import type { MatchStage } from "@prisma/client";
@@ -68,8 +70,9 @@ export default async function PicksPage() {
     peersByMatch[item.matchId].push(peer);
   }
 
-  const displayMatches = matches.map((match) =>
-    withGuatemalaSchedule({
+  const displayMatches = matches.map((match) => {
+    const pickDeadline = matchDeadlineAt(match);
+    return withGuatemalaSchedule({
       id: match.id,
       matchNumber: match.matchNumber,
       stage: match.stage,
@@ -88,8 +91,9 @@ export default async function PicksPage() {
       homeScore: match.homeScore,
       awayScore: match.awayScore,
       actualWinnerSide: match.actualWinnerSide,
-    }),
-  );
+      pickDeadlineLabel: match.stage === "GROUP" || !pickDeadline ? null : formatAppDateTime(pickDeadline),
+    });
+  });
 
   const groupCodes = Array.from(
     new Set(
