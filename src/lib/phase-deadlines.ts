@@ -3,6 +3,8 @@ import { atAppDay22Hours, formatAppDateTime } from "@/lib/timezone";
 import { previousStageForUnlock, stageLabels } from "@/lib/stages";
 
 const MS_DAY = 24 * 60 * 60 * 1000;
+const MS_HOUR = 60 * 60 * 1000;
+const DEVELOPMENT_PHASE_UNLOCKS = process.env.NODE_ENV === "development";
 
 export type PhaseDeadlineInfo = {
   stage: MatchStage;
@@ -40,6 +42,14 @@ type MatchForPhaseDeadlines = {
   status: MatchStatus;
 };
 
+function phaseDeadlineAt(stage: MatchStage, startsAt: Date) {
+  if (stage === "GROUP") {
+    return atAppDay22Hours(new Date(startsAt.getTime() - MS_DAY));
+  }
+
+  return new Date(startsAt.getTime() - MS_HOUR);
+}
+
 export function isStageComplete(
   matches: MatchForPhaseDeadlines[],
   stage: MatchStage,
@@ -66,14 +76,15 @@ export function computePhaseDeadlines(
   const deadlines = new Map<MatchStage, PhaseDeadlineInfo>();
 
   for (const [stage, startsAt] of firstKickoffByStage) {
-    const deadlineAt = atAppDay22Hours(new Date(startsAt.getTime() - MS_DAY));
+    const deadlineAt = phaseDeadlineAt(stage, startsAt);
     const peerVisibilityAt = deadlineAt;
-    const deadlineLocked = now >= deadlineAt;
+    const deadlineLocked = !DEVELOPMENT_PHASE_UNLOCKS && now >= deadlineAt;
     const previousStage = previousStageForUnlock(stage);
-    const sequentialLocked = previousStage
-      ? !isStageComplete(matches, previousStage)
-      : false;
-    const peerPredictionsVisible = now >= peerVisibilityAt;
+    const sequentialLocked =
+      !DEVELOPMENT_PHASE_UNLOCKS && previousStage
+        ? !isStageComplete(matches, previousStage)
+        : false;
+    const peerPredictionsVisible = DEVELOPMENT_PHASE_UNLOCKS || now >= peerVisibilityAt;
 
     deadlines.set(stage, {
       stage,
@@ -159,8 +170,8 @@ export function phaseDeadlineBanner(
     closed: false,
     title: "Limite de pronosticos",
     message: editable
-      ? `Puedes editar hasta el ${deadline.deadlineLabel} (hora Guatemala), un dia antes del inicio el ${deadline.startsLabel}.`
-      : `Hasta el ${deadline.deadlineLabel} (hora Guatemala, un dia antes del inicio el ${deadline.startsLabel}).`,
+      ? `Puedes editar hasta el ${deadline.deadlineLabel} (hora Guatemala), ${deadline.stage === "GROUP" ? "un dia antes" : "1 hora antes"} del inicio el ${deadline.startsLabel}.`
+      : `Hasta el ${deadline.deadlineLabel} (hora Guatemala, ${deadline.stage === "GROUP" ? "un dia antes" : "1 hora antes"} del inicio el ${deadline.startsLabel}).`,
   };
 }
 

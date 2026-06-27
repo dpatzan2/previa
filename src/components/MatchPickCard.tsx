@@ -6,13 +6,13 @@ import {
   GroupMatchScoreboard,
   KnockoutMatchScoreboard,
 } from "@/components/MatchScoreboard";
-import { TeamLabel } from "@/components/TeamLabel";
 import type { DisplayMatch, DisplayPrediction, PeerPrediction } from "@/lib/match-ui";
 
 function peerPickLabel(match: DisplayMatch, peer: PeerPrediction) {
+  const home = peer.predictedHomeScore;
+  const away = peer.predictedAwayScore;
+
   if (match.stage === "GROUP") {
-    const home = peer.predictedHomeScore;
-    const away = peer.predictedAwayScore;
     if (home === null || away === null) return "Sin pick";
     return `${home} : ${away}`;
   }
@@ -25,7 +25,9 @@ function peerPickLabel(match: DisplayMatch, peer: PeerPrediction) {
         ? match.away
         : null);
 
-  return name ?? "Sin pick";
+  const score = home === null || away === null ? null : `${home} : ${away}`;
+  if (score && name) return `${score} · ${name}`;
+  return score ?? name ?? "Sin pick";
 }
 
 export function MatchPickCard({
@@ -107,32 +109,23 @@ export function MatchPickCard({
           </div>
           {peers.length > 0 ? (
             <ul className="peer-picks-list">
-              {peers.map((peer) => (
-                <li className="peer-pick-row" key={peer.userId}>
-                  <span className="peer-pick-name">{peer.displayName}</span>
-                  <span className="peer-pick-value">
-                    {match.stage === "GROUP" ? (
-                      peerPickLabel(match, peer)
-                    ) : peer.pickedTeamName ||
-                      (peer.predictedWinnerSide === "HOME"
-                        ? match.home
-                        : peer.predictedWinnerSide === "AWAY"
-                          ? match.away
-                          : null) ? (
-                      <TeamLabel
-                        name={
-                          peer.pickedTeamName ??
-                          (peer.predictedWinnerSide === "HOME" ? match.home : match.away)
-                        }
-                        compact
-                      />
-                    ) : (
-                      <span className="muted">Sin pick</span>
-                    )}
-                  </span>
-                  <span className="points-pill compact">{peer.points} pts</span>
-                </li>
-              ))}
+              {peers.map((peer) => {
+                const pickLabel = peerPickLabel(match, peer);
+
+                return (
+                  <li className="peer-pick-row" key={peer.userId}>
+                    <span className="peer-pick-name">{peer.displayName}</span>
+                    <span className="peer-pick-value">
+                      {pickLabel === "Sin pick" ? (
+                        <span className="muted">Sin pick</span>
+                      ) : (
+                        pickLabel
+                      )}
+                    </span>
+                    <span className="points-pill compact">{peer.points} pts</span>
+                  </li>
+                );
+              })}
             </ul>
           ) : (
             <p className="peer-picks-empty muted">Nadie mas ha pronosticado este partido.</p>

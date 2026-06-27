@@ -151,44 +151,90 @@ export function KnockoutMatchScoreboard({
             <span>Pronostico oculto hasta inicio de fase</span>
           </div>
         </div>
-      ) : displayOnly ? (
-        <div className="knockout-pick-grid readonly-grid">
-          <div className={`knockout-option-body static${pickedHome ? " selected" : ""}`}>
-            <TeamLabel name={match.home} />
-            <small>{pickedHome ? "Pronostico" : "Pasa"}</small>
-          </div>
-          <div className={`knockout-option-body static${pickedAway ? " selected" : ""}`}>
-            <TeamLabel name={match.away} />
-            <small>{pickedAway ? "Pronostico" : "Pasa"}</small>
-          </div>
-        </div>
       ) : (
-        <div className="knockout-pick-grid">
-          <label className="knockout-option">
-            <input
-              type="radio"
-              name={`winnerSide:${match.id}`}
-              value="HOME"
-              defaultChecked={pickedHome}
-            />
-            <span className="knockout-option-body">
+        <>
+          <div className="scoreboard-body knockout-score-body">
+            <div className="scoreboard-side home">
               <TeamLabel name={match.home} />
-              <small>Pasa</small>
-            </span>
-          </label>
-          <label className="knockout-option">
-            <input
-              type="radio"
-              name={`winnerSide:${match.id}`}
-              value="AWAY"
-              defaultChecked={pickedAway}
-            />
-            <span className="knockout-option-body">
+            </div>
+
+            {displayOnly ? (
+              <div className="scoreboard-center readonly" aria-label="Marcador pronosticado">
+                <span className="scoreboard-score">
+                  {scoreText(prediction?.predictedHomeScore)}
+                </span>
+                <span className="scoreboard-sep">:</span>
+                <span className="scoreboard-score">
+                  {scoreText(prediction?.predictedAwayScore)}
+                </span>
+              </div>
+            ) : (
+              <div className="scoreboard-center">
+                <input
+                  aria-label={`${match.home} goles`}
+                  name={`homeScore:${match.id}`}
+                  type="number"
+                  min="0"
+                  className="scoreboard-input"
+                  defaultValue={prediction?.predictedHomeScore ?? ""}
+                />
+                <span className="scoreboard-sep">:</span>
+                <input
+                  aria-label={`${match.away} goles`}
+                  name={`awayScore:${match.id}`}
+                  type="number"
+                  min="0"
+                  className="scoreboard-input"
+                  defaultValue={prediction?.predictedAwayScore ?? ""}
+                />
+              </div>
+            )}
+
+            <div className="scoreboard-side away">
               <TeamLabel name={match.away} />
-              <small>Pasa</small>
-            </span>
-          </label>
-        </div>
+            </div>
+          </div>
+
+          {displayOnly ? (
+            <div className="knockout-pick-grid readonly-grid">
+              <div className={`knockout-option-body static${pickedHome ? " selected" : ""}`}>
+                <TeamLabel name={match.home} />
+                <small>{pickedHome ? "Pronostico" : "Pasa"}</small>
+              </div>
+              <div className={`knockout-option-body static${pickedAway ? " selected" : ""}`}>
+                <TeamLabel name={match.away} />
+                <small>{pickedAway ? "Pronostico" : "Pasa"}</small>
+              </div>
+            </div>
+          ) : (
+            <div className="knockout-pick-grid">
+              <label className="knockout-option">
+                <input
+                  type="radio"
+                  name={`winnerSide:${match.id}`}
+                  value="HOME"
+                  defaultChecked={pickedHome}
+                />
+                <span className="knockout-option-body">
+                  <TeamLabel name={match.home} />
+                  <small>Pasa</small>
+                </span>
+              </label>
+              <label className="knockout-option">
+                <input
+                  type="radio"
+                  name={`winnerSide:${match.id}`}
+                  value="AWAY"
+                  defaultChecked={pickedAway}
+                />
+                <span className="knockout-option-body">
+                  <TeamLabel name={match.away} />
+                  <small>Pasa</small>
+                </span>
+              </label>
+            </div>
+          )}
+        </>
       )}
     </article>
   );

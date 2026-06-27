@@ -101,6 +101,16 @@ export async function savePredictionsAction(
       const predictedHomeScore = readInt(formData.get(`homeScore:${match.id}`));
       const predictedAwayScore = readInt(formData.get(`awayScore:${match.id}`));
       const side = formData.get(`winnerSide:${match.id}`);
+      const predictedWinnerSide =
+        predictedHomeScore !== null && predictedAwayScore !== null
+          ? predictedHomeScore > predictedAwayScore
+            ? "HOME"
+            : predictedAwayScore > predictedHomeScore
+              ? "AWAY"
+              : side === "HOME" || side === "AWAY"
+                ? side
+                : null
+          : null;
 
       if (match.stage === "GROUP") {
         if (predictedHomeScore === null || predictedAwayScore === null) continue;
@@ -120,21 +130,27 @@ export async function savePredictionsAction(
             predictedAwayScore,
           },
         });
-      } else if (side === "HOME" || side === "AWAY") {
-        const teamId = side === "HOME" ? match.homeTeamId : match.awayTeamId;
+      } else if (
+        predictedHomeScore !== null &&
+        predictedAwayScore !== null &&
+        predictedWinnerSide
+      ) {
+        const teamId = predictedWinnerSide === "HOME" ? match.homeTeamId : match.awayTeamId;
         await prisma.prediction.upsert({
           where: { userId_matchId: { userId: user.id, matchId: match.id } },
           update: {
-            predictedHomeScore: null,
-            predictedAwayScore: null,
-            predictedWinnerSide: side,
+            predictedHomeScore,
+            predictedAwayScore,
+            predictedWinnerSide,
             predictedWinnerTeamId: teamId,
             points: 0,
           },
           create: {
             userId: user.id,
             matchId: match.id,
-            predictedWinnerSide: side,
+            predictedHomeScore,
+            predictedAwayScore,
+            predictedWinnerSide,
             predictedWinnerTeamId: teamId,
           },
         });
