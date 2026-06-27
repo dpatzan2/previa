@@ -148,7 +148,7 @@ export function KnockoutMatchScoreboard({
         <div className="knockout-pick-grid readonly-grid prediction-hidden-grid">
           <div className="prediction-hidden knockout-hidden-message">
             <Lock size={16} aria-hidden="true" />
-            <span>Pronostico oculto hasta inicio de fase</span>
+            <span>Pronostico oculto hasta el cierre del partido</span>
           </div>
         </div>
       ) : (

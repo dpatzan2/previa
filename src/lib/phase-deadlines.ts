@@ -50,6 +50,19 @@ function phaseDeadlineAt(stage: MatchStage, startsAt: Date) {
   return new Date(startsAt.getTime() - MS_HOUR);
 }
 
+function isGroupStage(stage: MatchStage) {
+  return stage === "GROUP";
+}
+
+export function matchDeadlineAt(match: { stage: MatchStage; kickoffAt?: Date | null }) {
+  if (!match.kickoffAt) return null;
+  if (isGroupStage(match.stage)) {
+    return atAppDay22Hours(new Date(match.kickoffAt.getTime() - MS_DAY));
+  }
+
+  return new Date(match.kickoffAt.getTime() - MS_HOUR);
+}
+
 export function isStageComplete(
   matches: MatchForPhaseDeadlines[],
   stage: MatchStage,
@@ -64,6 +77,7 @@ export function computePhaseDeadlines(
   now = new Date(),
 ): Map<MatchStage, PhaseDeadlineInfo> {
   const firstKickoffByStage = new Map<MatchStage, Date>();
+  const latestDeadlineByStage = new Map<MatchStage, Date>();
 
   for (const match of matches) {
     if (!match.kickoffAt) continue;
@@ -71,12 +85,18 @@ export function computePhaseDeadlines(
     if (!current || match.kickoffAt < current) {
       firstKickoffByStage.set(match.stage, match.kickoffAt);
     }
+
+    const matchDeadline = isGroupStage(match.stage) ? null : matchDeadlineAt(match);
+    const latestDeadline = latestDeadlineByStage.get(match.stage);
+    if (matchDeadline && (!latestDeadline || matchDeadline > latestDeadline)) {
+      latestDeadlineByStage.set(match.stage, matchDeadline);
+    }
   }
 
   const deadlines = new Map<MatchStage, PhaseDeadlineInfo>();
 
   for (const [stage, startsAt] of firstKickoffByStage) {
-    const deadlineAt = phaseDeadlineAt(stage, startsAt);
+    const deadlineAt = latestDeadlineByStage.get(stage) ?? phaseDeadlineAt(stage, startsAt);
     const peerVisibilityAt = deadlineAt;
     const deadlineLocked = !DEVELOPMENT_PHASE_UNLOCKS && now >= deadlineAt;
     const previousStage = previousStageForUnlock(stage);
@@ -114,12 +134,32 @@ export function canViewPeerPredictions(deadline?: SerializedPhaseDeadline | Phas
   return arePeerPredictionsVisible(deadline);
 }
 
+export function canViewPeerPredictionsForMatch(
+  match: { stage: MatchStage; kickoffAt?: Date | null },
+  deadlines: Map<MatchStage, PhaseDeadlineInfo>,
+  now = new Date(),
+) {
+  if (DEVELOPMENT_PHASE_UNLOCKS) return true;
+  if (isGroupStage(match.stage)) {
+    return canViewPeerPredictions(deadlines.get(match.stage));
+  }
+
+  const phase = deadlines.get(match.stage);
+  if (phase?.sequentialLocked) return false;
+
+  const deadlineAt = matchDeadlineAt(match);
+  return deadlineAt ? now >= deadlineAt : canViewPeerPredictions(phase);
+}
+
 export function phasePeerVisibilityBanner(deadline: SerializedPhaseDeadline) {
   if (canViewPeerPredictions(deadline)) return null;
 
   return {
     title: "Pronosticos ocultos",
-    message: `Estos pronosticos se podran ver el ${deadline.peerVisibilityLabel} (hora Guatemala).`,
+    message:
+      deadline.stage === "GROUP"
+        ? `Estos pronosticos se podran ver el ${deadline.peerVisibilityLabel} (hora Guatemala).`
+        : "Estos pronosticos se podran ver conforme cierre cada partido.",
   };
 }
 
@@ -138,7 +178,8 @@ export function firstEnterableStage(
 
 export function phaseTabStatusLabel(deadline: SerializedPhaseDeadline) {
   if (deadline.deadlineLocked) return "Cerrada";
-  return `Hasta ${deadline.deadlineLabel} GT`;
+  if (deadline.stage === "GROUP") return `Hasta ${deadline.deadlineLabel} GT`;
+  return `Partidos hasta ${deadline.deadlineLabel} GT`;
 }
 
 export function phaseDeadlineBanner(
@@ -170,8 +211,12 @@ export function phaseDeadlineBanner(
     closed: false,
     title: "Limite de pronosticos",
     message: editable
-      ? `Puedes editar hasta el ${deadline.deadlineLabel} (hora Guatemala), ${deadline.stage === "GROUP" ? "un dia antes" : "1 hora antes"} del inicio el ${deadline.startsLabel}.`
-      : `Hasta el ${deadline.deadlineLabel} (hora Guatemala, ${deadline.stage === "GROUP" ? "un dia antes" : "1 hora antes"} del inicio el ${deadline.startsLabel}).`,
+      ? deadline.stage === "GROUP"
+        ? `Puedes editar hasta el ${deadline.deadlineLabel} (hora Guatemala), un dia antes del inicio el ${deadline.startsLabel}.`
+        : "Puedes editar cada partido hasta 1 hora antes de su inicio."
+      : deadline.stage === "GROUP"
+        ? `Hasta el ${deadline.deadlineLabel} (hora Guatemala, un dia antes del inicio el ${deadline.startsLabel}).`
+        : "Cada partido se puede pronosticar hasta 1 hora antes de su inicio.",
   };
 }
 
@@ -183,10 +228,19 @@ export function isPhaseLockedForPicks(
 }
 
 export function isMatchLockedForPicks(
-  match: { stage: MatchStage },
+  match: { stage: MatchStage; kickoffAt?: Date | null },
   deadlines: Map<MatchStage, PhaseDeadlineInfo>,
+  now = new Date(),
 ) {
-  return isPhaseLockedForPicks(match.stage, deadlines);
+  if (DEVELOPMENT_PHASE_UNLOCKS) return false;
+  const phase = deadlines.get(match.stage);
+  if (phase?.sequentialLocked) return true;
+  if (isGroupStage(match.stage)) return phase?.deadlineLocked ?? false;
+
+  const deadlineAt = matchDeadlineAt(match);
+  if (!deadlineAt) return phase?.locked ?? false;
+
+  return now >= deadlineAt;
 }
 
 export function hasOpenPickPhases(deadlines: Map<MatchStage, PhaseDeadlineInfo>) {

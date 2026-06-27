@@ -1,7 +1,7 @@
 "use client";
 
 import { Save } from "lucide-react";
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { saveScoringSettingsAction } from "@/app/actions";
 import { FormFeedback, useActionFeedback } from "@/components/FormFeedback";
 import { SubmitButton } from "@/components/SubmitButton";
@@ -9,6 +9,7 @@ import type { ScoringRules } from "@/lib/scoring-settings";
 
 export function ScoringSettingsForm({ rules }: { rules: ScoringRules }) {
   const [state, action, isPending] = useActionState(saveScoringSettingsAction, null);
+  const [exactPoints, setExactPoints] = useState(String(rules.groupExactPoints));
   const feedback = useActionFeedback(state);
 
   return (
@@ -29,7 +30,8 @@ export function ScoringSettingsForm({ rules }: { rules: ScoringRules }) {
                 type="number"
                 min="0"
                 max="99"
-                defaultValue={rules.groupExactPoints}
+                value={exactPoints}
+                onChange={(event) => setExactPoints(event.target.value)}
                 required
               />
             </label>
@@ -48,7 +50,19 @@ export function ScoringSettingsForm({ rules }: { rules: ScoringRules }) {
           <fieldset className="scoring-rule-group">
             <legend>Eliminatorias</legend>
             <label>
-              Quien pasa a la siguiente fase
+              Marcador exacto + quien pasa
+              <input
+                name="groupExactPoints"
+                type="number"
+                min="0"
+                max="99"
+                value={exactPoints}
+                onChange={(event) => setExactPoints(event.target.value)}
+                required
+              />
+            </label>
+            <label>
+              Solo quien pasa (marcador distinto)
               <input
                 name="knockoutAdvancePoints"
                 type="number"
@@ -65,6 +79,10 @@ export function ScoringSettingsForm({ rules }: { rules: ScoringRules }) {
           <li>
             Solo ganador o empate: acierta local, visitante o empate aunque el marcador no
             coincida (ej. pronostico 0-0 y resultado 1-1).
+          </li>
+          <li>
+            En eliminatorias, primero debes acertar quien pasa. Con marcador exacto sumas el maximo;
+            con marcador distinto sumas solo quien pasa.
           </li>
           <li>Sin acierto en ganador o empate: 0 puntos.</li>
           <li>Al guardar se recalculan los puntos de todos los participantes.</li>

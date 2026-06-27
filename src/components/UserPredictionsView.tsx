@@ -55,8 +55,11 @@ export function UserPredictionsView({
           });
           const deadline = deadlineMap[stage];
           const banner = deadline ? phaseDeadlineBanner(deadline) : null;
-          const peerBanner = deadline ? phasePeerVisibilityBanner(deadline) : null;
-          const picksVisible = canViewPeerPredictions(deadline);
+          const hasVisiblePicks = visibleMatches.some(
+            (match) => match.peerPicksVisible ?? canViewPeerPredictions(deadline),
+          );
+          const peerBanner =
+            deadline && !hasVisiblePicks ? phasePeerVisibilityBanner(deadline) : null;
 
           return (
             <section className="panel scoreboard-panel">
@@ -76,7 +79,7 @@ export function UserPredictionsView({
                 </div>
               ) : null}
 
-              {banner && picksVisible ? (
+              {banner && hasVisiblePicks ? (
                 <div className={`phase-deadline${banner.closed ? " closed" : ""}`}>
                   <strong>{banner.title}</strong>
                   <span>{banner.message}</span>
@@ -88,6 +91,8 @@ export function UserPredictionsView({
                   const isVisible =
                     match.stage === stage &&
                     (stage !== "GROUP" || match.groupCode === groupCode);
+                  const picksVisible =
+                    match.peerPicksVisible ?? canViewPeerPredictions(deadline);
                   const prediction = picksVisible ? predictions[match.id] : undefined;
 
                   return match.stage === "GROUP" ? (

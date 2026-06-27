@@ -8,8 +8,8 @@ import { teamName, withGuatemalaSchedule } from "@/lib/match-ui";
 import { participantWhere } from "@/lib/participants";
 import {
   computePhaseDeadlines,
-  canViewPeerPredictions,
-  isPhaseLockedForPicks,
+  canViewPeerPredictionsForMatch,
+  isMatchLockedForPicks,
   serializePhaseDeadlines,
 } from "@/lib/phase-deadlines";
 import { stageOrder } from "@/lib/stages";
@@ -45,7 +45,7 @@ export default async function UserPredictionsPage({
       .filter((item) => {
         const match = matches.find((entry) => entry.id === item.matchId);
         if (!match) return false;
-        return canViewPeerPredictions(phaseDeadlines.get(match.stage));
+        return canViewPeerPredictionsForMatch(match, phaseDeadlines);
       })
       .map((item) => [
         item.matchId,
@@ -69,7 +69,8 @@ export default async function UserPredictionsPage({
       kickoffAt: match.kickoffAt,
       venue: match.venue,
       venueShort: match.venueShort,
-      locked: isPhaseLockedForPicks(match.stage, phaseDeadlines),
+      locked: isMatchLockedForPicks(match, phaseDeadlines),
+      peerPicksVisible: canViewPeerPredictionsForMatch(match, phaseDeadlines),
       home: teamName(match.homeTeam, match.homePlaceholder, "Local"),
       away: teamName(match.awayTeam, match.awayPlaceholder, "Visitante"),
       homeTeamId: match.homeTeamId,

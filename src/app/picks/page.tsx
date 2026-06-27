@@ -4,9 +4,9 @@ import { prisma } from "@/lib/db";
 import { teamName, withGuatemalaSchedule } from "@/lib/match-ui";
 import type { PeerPrediction } from "@/lib/match-ui";
 import {
-  canViewPeerPredictions,
+  canViewPeerPredictionsForMatch,
   computePhaseDeadlines,
-  isPhaseLockedForPicks,
+  isMatchLockedForPicks,
   serializePhaseDeadlines,
 } from "@/lib/phase-deadlines";
 import { participantWhere } from "@/lib/participants";
@@ -53,8 +53,7 @@ export default async function PicksPage() {
     const match = matchById.get(item.matchId);
     if (!match) continue;
 
-    const deadline = phaseDeadlines.get(match.stage);
-    if (!canViewPeerPredictions(deadline)) continue;
+    if (!canViewPeerPredictionsForMatch(match, phaseDeadlines)) continue;
 
     const peer: PeerPrediction = {
       userId: item.userId,
@@ -80,7 +79,8 @@ export default async function PicksPage() {
       kickoffAt: match.kickoffAt,
       venue: match.venue,
       venueShort: match.venueShort,
-      locked: isPhaseLockedForPicks(match.stage, phaseDeadlines),
+      locked: isMatchLockedForPicks(match, phaseDeadlines),
+      peerPicksVisible: canViewPeerPredictionsForMatch(match, phaseDeadlines),
       home: teamName(match.homeTeam, match.homePlaceholder, "Local"),
       away: teamName(match.awayTeam, match.awayPlaceholder, "Visitante"),
       homeTeamId: match.homeTeamId,

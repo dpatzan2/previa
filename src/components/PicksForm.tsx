@@ -89,6 +89,8 @@ export function PicksForm({
                     match.stage === stage && (stage !== "GROUP" || match.groupCode === groupCode);
                   const prediction = predictions[match.id];
                   const deadline = deadlineMap[match.stage];
+                  const peerPicksVisible =
+                    match.peerPicksVisible ?? canViewPeerPredictions(deadline);
 
                   return (
                     <MatchPickCard
@@ -96,7 +98,7 @@ export function PicksForm({
                       match={match}
                       prediction={prediction}
                       peers={peersByMatch[match.id] ?? []}
-                      peerPicksVisible={canViewPeerPredictions(deadline)}
+                      peerPicksVisible={peerPicksVisible}
                       phaseStartsLabel={deadline?.startsLabel}
                       hidden={!isVisible}
                     />

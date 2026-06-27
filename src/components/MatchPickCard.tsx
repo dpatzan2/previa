@@ -78,12 +78,12 @@ export function MatchPickCard({
           aria-label={
             peerPicksVisible
               ? `Ver pronosticos de otros participantes, partido ${match.matchNumber}`
-              : `Pronosticos de otros disponibles al iniciar la fase, partido ${match.matchNumber}`
+              : `Pronosticos de otros disponibles al cierre del partido ${match.matchNumber}`
           }
           title={
             peerPicksVisible
               ? undefined
-              : `Disponible cuando inicie la fase${phaseStartsLabel ? ` (${phaseStartsLabel} GT)` : ""}`
+              : `Disponible cuando cierre el partido${phaseStartsLabel ? ` de la fase iniciada el ${phaseStartsLabel} GT` : ""}`
           }
           onClick={() => {
             if (!peerPicksVisible) return;

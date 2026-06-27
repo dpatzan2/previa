@@ -37,6 +37,25 @@ function sameOutcome(
     matchOutcome(prediction.predictedHomeScore, prediction.predictedAwayScore);
 }
 
+function sameWinner(
+  match: Pick<Match, "actualWinnerSide" | "actualWinnerTeamId">,
+  prediction: Pick<Prediction, "predictedWinnerSide" | "predictedWinnerTeamId">,
+) {
+  if (
+    prediction.predictedWinnerTeamId &&
+    match.actualWinnerTeamId &&
+    prediction.predictedWinnerTeamId === match.actualWinnerTeamId
+  ) {
+    return true;
+  }
+
+  return Boolean(
+    prediction.predictedWinnerSide &&
+      match.actualWinnerSide &&
+      prediction.predictedWinnerSide === match.actualWinnerSide,
+  );
+}
+
 export function scorePrediction(
   match: Pick<
     Match,
@@ -79,21 +98,19 @@ export function scorePrediction(
     return 0;
   }
 
-  if (
-    prediction.predictedWinnerTeamId &&
-    match.actualWinnerTeamId &&
-    prediction.predictedWinnerTeamId === match.actualWinnerTeamId
-  ) {
-    return rules.knockoutAdvancePoints;
+  if (!sameWinner(match, prediction)) {
+    return 0;
   }
 
   if (
-    prediction.predictedWinnerSide &&
-    match.actualWinnerSide &&
-    prediction.predictedWinnerSide === match.actualWinnerSide
+    match.homeScore !== null &&
+    match.awayScore !== null &&
+    prediction.predictedHomeScore !== null &&
+    prediction.predictedAwayScore !== null &&
+    exactScore(match, prediction)
   ) {
-    return rules.knockoutAdvancePoints;
+    return rules.groupExactPoints;
   }
 
-  return 0;
+  return rules.knockoutAdvancePoints;
 }

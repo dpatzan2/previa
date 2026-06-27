@@ -11,7 +11,7 @@ export type ScoringRules = {
 export const defaultScoringRules: ScoringRules = {
   groupExactPoints: 3,
   groupOutcomePoints: 1,
-  knockoutAdvancePoints: 3,
+  knockoutAdvancePoints: 1,
 };
 
 export async function getScoringRules(): Promise<ScoringRules> {

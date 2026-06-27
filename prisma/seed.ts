@@ -10,7 +10,7 @@ import { scorePrediction } from "../src/lib/scoring";
 const defaultSeedScoringRules = {
   groupExactPoints: 3,
   groupOutcomePoints: 1,
-  knockoutAdvancePoints: 3,
+  knockoutAdvancePoints: 1,
 };
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
