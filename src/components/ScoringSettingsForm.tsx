@@ -50,7 +50,7 @@ export function ScoringSettingsForm({ rules }: { rules: ScoringRules }) {
           <fieldset className="scoring-rule-group">
             <legend>Eliminatorias</legend>
             <label>
-              Marcador exacto + quien pasa
+              Marcador exacto
               <input
                 name="groupExactPoints"
                 type="number"
@@ -81,8 +81,8 @@ export function ScoringSettingsForm({ rules }: { rules: ScoringRules }) {
             coincida (ej. pronostico 0-0 y resultado 1-1).
           </li>
           <li>
-            En eliminatorias, primero debes acertar quien pasa. Con marcador exacto sumas el maximo;
-            con marcador distinto sumas solo quien pasa.
+            En eliminatorias, el marcador exacto suma el maximo aunque el clasificado sea distinto;
+            si el marcador no coincide, solo suma acertar quien pasa.
           </li>
           <li>Sin acierto en ganador o empate: 0 puntos.</li>
           <li>Al guardar se recalculan los puntos de todos los participantes.</li>

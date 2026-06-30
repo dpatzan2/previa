@@ -98,10 +98,6 @@ export function scorePrediction(
     return 0;
   }
 
-  if (!sameWinner(match, prediction)) {
-    return 0;
-  }
-
   if (
     match.homeScore !== null &&
     match.awayScore !== null &&
@@ -110,6 +106,10 @@ export function scorePrediction(
     exactScore(match, prediction)
   ) {
     return rules.groupExactPoints;
+  }
+
+  if (!sameWinner(match, prediction)) {
+    return 0;
   }
 
   return rules.knockoutAdvancePoints;

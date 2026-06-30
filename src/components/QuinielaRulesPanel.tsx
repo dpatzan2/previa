@@ -36,7 +36,7 @@ export function QuinielaRulesPanel({ rules }: { rules: ScoringRules }) {
           <ul className="quiniela-rules-list">
             <li>
               <strong>{rules.groupExactPoints} pts</strong>
-              <span>Marcador exacto y aciertas quien pasa a la siguiente fase.</span>
+              <span>Marcador exacto, aunque el clasificado sea distinto.</span>
             </li>
             <li>
               <strong>{rules.knockoutAdvancePoints} pt</strong>
