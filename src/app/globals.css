@@ -1524,6 +1524,7 @@ input:disabled {
   display: flex;
   justify-content: flex-end;
   pointer-events: none;
+  z-index: 20;
 }
 
 .sticky-actions button {
@@ -1789,12 +1790,17 @@ input:disabled {
   }
 
   .sticky-actions {
+    position: fixed;
     left: 10px;
     right: 10px;
     bottom: 10px;
+    width: auto;
+    max-width: calc(100vw - 20px);
+    box-sizing: border-box;
   }
 
   .sticky-actions .primary-button {
+    min-width: 0;
     width: 100%;
   }
 
