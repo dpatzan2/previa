@@ -20,7 +20,7 @@ html,
 body {
   min-height: 100%;
   max-width: 100%;
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 body {
@@ -768,17 +768,21 @@ input:disabled {
 .phase-tabs-root {
   display: grid;
   gap: 12px;
+  width: 100%;
   min-width: 0;
+  max-width: 100%;
 }
 
 .phase-tabs,
 .group-tabs {
   display: flex;
   gap: 8px;
+  width: 100%;
   max-width: 100%;
   min-width: 0;
   overflow-x: auto;
   overflow-y: hidden;
+  overscroll-behavior-x: contain;
   padding-bottom: 2px;
   scrollbar-width: thin;
 }
@@ -875,7 +879,9 @@ input:disabled {
 }
 
 .phase-panel {
+  width: 100%;
   min-width: 0;
+  max-width: 100%;
 }
 
 .scoreboard-panel .panel-head h2 {
@@ -886,7 +892,9 @@ input:disabled {
   display: grid;
   gap: 12px;
   padding: 14px;
+  width: 100%;
   min-width: 0;
+  max-width: 100%;
 }
 
 .scoreboard-card.nested {
@@ -1548,6 +1556,11 @@ input:disabled {
 }
 
 @media (max-width: 1080px) {
+  html,
+  body {
+    overflow-x: hidden;
+  }
+
   .app-shell {
     display: block;
   }
@@ -1667,11 +1680,13 @@ input:disabled {
   }
 
   .match-pick-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 42px;
     width: 100%;
   }
 
   .match-pick-main {
-    max-width: calc(100% - 42px);
+    max-width: 100%;
   }
 
   .scoreboard-head {
@@ -1707,6 +1722,15 @@ input:disabled {
 
   .knockout-pick-grid {
     grid-template-columns: 1fr;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .knockout-option,
+  .knockout-option-body,
+  .knockout-option-body.static {
+    min-width: 0;
+    max-width: 100%;
   }
 
   .admin-body .scoreboard-side select {
