@@ -762,7 +762,9 @@ input:disabled {
 .prediction-form {
   display: grid;
   gap: 18px;
+  width: 100%;
   min-width: 0;
+  max-width: 100%;
 }
 
 .phase-tabs-root {
@@ -771,18 +773,21 @@ input:disabled {
   width: 100%;
   min-width: 0;
   max-width: 100%;
+  overflow-x: hidden;
 }
 
 .phase-tabs,
 .group-tabs {
   display: flex;
+  flex-wrap: nowrap;
   gap: 8px;
   width: 100%;
-  max-width: 100%;
+  max-width: min(100%, 100vw);
   min-width: 0;
   overflow-x: auto;
   overflow-y: hidden;
   overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
   padding-bottom: 2px;
   scrollbar-width: thin;
 }
@@ -806,6 +811,7 @@ input:disabled {
   display: grid;
   gap: 2px;
   justify-items: start;
+  max-width: min(260px, calc(100vw - 40px));
   min-height: 52px;
   padding: 8px 14px;
   white-space: normal;
@@ -822,6 +828,10 @@ input:disabled {
   font-size: 0.72rem;
   font-weight: 650;
   opacity: 0.85;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .phase-tab.locked:not(.active) {
@@ -1184,13 +1194,19 @@ input:disabled {
 
 .knockout-pick-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   padding: 14px;
 }
 
 .knockout-option {
   display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   cursor: pointer;
 }
 
@@ -1206,6 +1222,11 @@ input:disabled {
   display: grid;
   gap: 6px;
   justify-items: center;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: #fff;
@@ -1231,9 +1252,28 @@ input:disabled {
   display: grid;
   gap: 6px;
   justify-items: center;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: #fff;
+}
+
+.knockout-option-body .team-label {
+  max-width: 100%;
+  flex-wrap: wrap;
+  justify-content: center;
+  text-align: center;
+  white-space: normal;
+}
+
+.knockout-option-body .team-label span:last-child {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .knockout-option-body.static.selected {
@@ -1564,18 +1604,35 @@ input:disabled {
 
   .app-shell {
     display: block;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
   }
 
   .sidebar {
     position: static;
     width: 100%;
+    min-width: 0;
+    max-width: 100%;
     height: auto;
     padding: 14px;
+    overflow-x: hidden;
   }
 
   .content {
     width: 100%;
+    min-width: 0;
+    max-width: 100%;
     padding: 14px;
+    overflow-x: hidden;
+  }
+
+  .page,
+  .phase-panel,
+  .scoreboard-panel {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
   }
 
   .brand {
@@ -1585,7 +1642,10 @@ input:disabled {
   .nav-list {
     grid-auto-flow: column;
     grid-auto-columns: max-content;
+    min-width: 0;
+    max-width: 100%;
     overflow-x: auto;
+    overscroll-behavior-x: contain;
     padding-bottom: 4px;
   }
 
@@ -1747,6 +1807,12 @@ input:disabled {
   .knockout-option-body.static {
     min-width: 0;
     max-width: 100%;
+  }
+
+  .knockout-option-body,
+  .knockout-option-body.static {
+    padding-left: 8px;
+    padding-right: 8px;
   }
 
   .admin-body .scoreboard-side select {
