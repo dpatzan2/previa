@@ -24,7 +24,7 @@ export default async function RootLayout({
   const user = await getCurrentUser();
 
   return (
-    <html lang="es">
+    <html lang="es" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: `
           (function() {

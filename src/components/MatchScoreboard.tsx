@@ -42,7 +42,9 @@ export function GroupMatchScoreboard({
             </span>
           ) : null}
           {!predictionHidden ? (
-            <span className="points-pill">{prediction?.points ?? 0} pts</span>
+            <span className="points-pill">
+              {(prediction?.points ?? 0) + (prediction?.bonusPoints ?? 0)} pts
+            </span>
           ) : null}
         </div>
       </header>
@@ -138,7 +140,9 @@ export function KnockoutMatchScoreboard({
             </span>
           ) : null}
           {!predictionHidden ? (
-            <span className="points-pill">{prediction?.points ?? 0} pts</span>
+            <span className="points-pill">
+              {(prediction?.points ?? 0) + (prediction?.bonusPoints ?? 0)} pts
+            </span>
           ) : null}
         </div>
       </header>

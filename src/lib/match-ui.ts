@@ -21,6 +21,12 @@ export type DisplayMatch = {
   homeScore: number | null;
   awayScore: number | null;
   actualWinnerSide: "HOME" | "AWAY" | null;
+  status: "SCHEDULED" | "LIVE" | "FINISHED";
+};
+
+export type DisplayMarketAnswer = {
+  value: Record<string, unknown>;
+  points: number;
 };
 
 export type DisplayPrediction = {
@@ -28,6 +34,7 @@ export type DisplayPrediction = {
   predictedAwayScore: number | null;
   predictedWinnerSide: "HOME" | "AWAY" | null;
   points: number;
+  bonusPoints?: number;
 };
 
 export type PeerPrediction = {

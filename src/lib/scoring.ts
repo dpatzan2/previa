@@ -2,6 +2,8 @@ import type { Match, Prediction } from "@prisma/client";
 import type { ScoringRules } from "@/lib/scoring-settings";
 import { defaultScoringRules } from "@/lib/scoring-settings";
 
+type BaseMarket = "EXACT_SCORE" | "MATCH_OUTCOME" | "ADVANCING_TEAM";
+
 type Outcome = "HOME" | "AWAY" | "DRAW";
 
 function matchOutcome(home: number, away: number): Outcome {
@@ -74,6 +76,11 @@ export function scorePrediction(
     | "predictedWinnerTeamId"
   >,
   rules: ScoringRules = defaultScoringRules,
+  enabledMarkets: ReadonlySet<string> = new Set<BaseMarket>([
+    "EXACT_SCORE",
+    "MATCH_OUTCOME",
+    "ADVANCING_TEAM",
+  ]),
 ) {
   if (match.status !== "FINISHED") return 0;
 
@@ -87,11 +94,11 @@ export function scorePrediction(
       return 0;
     }
 
-    if (exactScore(match, prediction)) {
+    if (enabledMarkets.has("EXACT_SCORE") && exactScore(match, prediction)) {
       return rules.groupExactPoints;
     }
 
-    if (sameOutcome(match, prediction)) {
+    if (enabledMarkets.has("MATCH_OUTCOME") && sameOutcome(match, prediction)) {
       return rules.groupOutcomePoints;
     }
 
@@ -103,12 +110,13 @@ export function scorePrediction(
     match.awayScore !== null &&
     prediction.predictedHomeScore !== null &&
     prediction.predictedAwayScore !== null &&
+    enabledMarkets.has("EXACT_SCORE") &&
     exactScore(match, prediction)
   ) {
     return rules.groupExactPoints;
   }
 
-  if (!sameWinner(match, prediction)) {
+  if (!enabledMarkets.has("ADVANCING_TEAM") || !sameWinner(match, prediction)) {
     return 0;
   }
 

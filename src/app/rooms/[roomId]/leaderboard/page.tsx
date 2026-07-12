@@ -15,34 +15,20 @@ export default async function RoomLeaderboardPage({
   const { room, membership } = await requireRoomMembership(roomId, user.id);
   const canManage = membership.role === "OWNER" || membership.role === "ADMIN";
 
-  const members = await prisma.roomMember.findMany({
+  const entries = await prisma.roomLeaderboardEntry.findMany({
     where: { roomId },
-    include: {
-      user: {
-        include: {
-          predictions: {
-            where: { roomId },
-          },
-          predictionAnswers: {
-            where: { roomId },
-          },
-        },
-      },
-    },
-    orderBy: { joinedAt: "asc" },
+    include: { user: { select: { displayName: true } } },
+    orderBy: [{ totalPoints: "desc" }, { predictionCount: "desc" }, { userId: "asc" }],
   });
 
-  const rows = members
-    .map((member) => ({
-      id: member.userId,
-      name: member.user.displayName,
-      role: member.role,
-      predictions: member.user.predictions.length + member.user.predictionAnswers.length,
-      points:
-        member.user.predictions.reduce((sum, prediction) => sum + prediction.points, 0) +
-        member.user.predictionAnswers.reduce((sum, answer) => sum + answer.points, 0),
-    }))
-    .sort((a, b) => b.points - a.points || b.predictions - a.predictions || a.name.localeCompare(b.name));
+  const roleByUserId = new Map(room.members.map((member) => [member.userId, member.role]));
+  const rows = entries.map((entry) => ({
+    id: entry.userId,
+    name: entry.user.displayName,
+    role: roleByUserId.get(entry.userId) ?? "MEMBER",
+    predictions: entry.predictionCount,
+    points: entry.totalPoints,
+  }));
 
   return (
     <div className="page">

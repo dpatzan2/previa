@@ -10,8 +10,10 @@ import {
   type RoomMemberRole,
   type TournamentType,
   MatchStatus,
+  Prisma,
 } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import crypto from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect, unstable_rethrow } from "next/navigation";
 import { z } from "zod";
@@ -21,12 +23,11 @@ import { signIn, signOut, requireAdmin, requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { canParticipateInPool } from "@/lib/participants";
 import { computePhaseDeadlines, isMatchLockedForPicks, roomDeadlineConfig } from "@/lib/phase-deadlines";
-import { scorePrediction } from "@/lib/scoring";
-import { getScoringRules, SCORING_SETTINGS_ID } from "@/lib/scoring-settings";
+import { SCORING_SETTINGS_ID } from "@/lib/scoring-settings";
 import { syncWc2026Matches } from "@/lib/wc2026";
 import type { ActionFeedbackState } from "@/lib/form-action-state";
 import { safeRedirectPath } from "@/lib/session-cookie";
-import { roomMarketPoints, scoreMarketAnswer } from "@/lib/market-scoring";
+import { recalculateScoresInScope, refreshRoomLeaderboards } from "@/lib/score-recalculation";
 import {
   bonusMarketsFor,
   marketsForPreset,
@@ -34,7 +35,6 @@ import {
   roomMarketCatalog,
   type RoomMarketKey,
 } from "@/lib/room-presets";
-import { scoringRulesFromRoomRuleSet } from "@/lib/rooms";
 import { parseAppDateTime } from "@/lib/timezone";
 
 function readInt(value: FormDataEntryValue | null) {
@@ -734,26 +734,30 @@ export async function saveCompetitionMatchResultAction(formData: FormData) {
   const winnerSideRaw = formData.get(`actualWinner:${matchId}`);
   const status = String(formData.get(`status:${matchId}`) ?? "SCHEDULED");
 
-  // 1. Update CompetitionMatch
-  const compMatch = await prisma.competitionMatch.update({
-    where: { id: matchId },
-    data: {
-      homeScore,
-      awayScore,
-      status: status as MatchStatus,
-    },
-    include: { phase: true, homeTeam: true, awayTeam: true },
-  });
+  if (status === "FINISHED" && (homeScore === null || awayScore === null)) {
+    redirect(`/admin/${competitionId}?tab=matches&editMatchId=${matchId}&error=missing-score`);
+  }
 
-  // 2. Ensure legacy Match exists and update it
-  if (compMatch) {
-    const legacyMatchExists = await prisma.match.findUnique({ where: { id: matchId } });
+  await prisma.$transaction(async (tx) => {
+    // Update the canonical competition result and its scoring projection atomically.
+    const compMatch = await tx.competitionMatch.update({
+      where: { id: matchId },
+      data: {
+        homeScore,
+        awayScore,
+        status: status as MatchStatus,
+      },
+      include: { phase: true, homeTeam: true, awayTeam: true },
+    });
+
+    // Keep the legacy Match projection in sync for room predictions.
+    const legacyMatchExists = await tx.match.findUnique({ where: { id: matchId } });
     
     let homeTeamId = null;
     let awayTeamId = null;
     
     if (compMatch.homeTeam) {
-      const t = await prisma.team.upsert({
+      const t = await tx.team.upsert({
         where: { normalizedName: compMatch.homeTeam.normalizedName },
         update: {},
         create: { name: compMatch.homeTeam.name, normalizedName: compMatch.homeTeam.normalizedName },
@@ -761,7 +765,7 @@ export async function saveCompetitionMatchResultAction(formData: FormData) {
       homeTeamId = t.id;
     }
     if (compMatch.awayTeam) {
-      const t = await prisma.team.upsert({
+      const t = await tx.team.upsert({
         where: { normalizedName: compMatch.awayTeam.normalizedName },
         update: {},
         create: { name: compMatch.awayTeam.name, normalizedName: compMatch.awayTeam.normalizedName },
@@ -780,13 +784,13 @@ export async function saveCompetitionMatchResultAction(formData: FormData) {
     }
 
     if (!legacyMatchExists) {
-      const maxLegacyMatch = await prisma.match.findFirst({
+      const maxLegacyMatch = await tx.match.findFirst({
         orderBy: { matchNumber: "desc" },
         select: { matchNumber: true },
       });
       const legacyMatchNumber = (maxLegacyMatch?.matchNumber ?? 0) + 1;
       
-      await prisma.match.create({
+      await tx.match.create({
         data: {
           id: matchId,
           matchNumber: legacyMatchNumber,
@@ -806,7 +810,7 @@ export async function saveCompetitionMatchResultAction(formData: FormData) {
         }
       });
     } else {
-      await prisma.match.update({
+      await tx.match.update({
         where: { id: matchId },
         data: {
           homeTeamId,
@@ -826,14 +830,13 @@ export async function saveCompetitionMatchResultAction(formData: FormData) {
       .filter((k) => k !== "EXACT_SCORE" && k !== "MATCH_OUTCOME" && k !== "ADVANCING_TEAM");
 
     await saveMatchMarketResults({
+      db: tx,
       matchId,
       markets: manualMarkets,
       formData,
     });
-  }
-
-  // 4. Recalculate scores for predictions
-  await recalculateScores();
+    await recalculateScoresInScope(tx, { matchId });
+  }, { maxWait: 5_000, timeout: 20_000 });
 
   revalidatePath("/admin");
   revalidatePath(`/admin/${competitionId}`);
@@ -902,6 +905,9 @@ export async function createRoomAction(formData: FormData) {
           enabledMarkets: marketsForPreset(configPreset),
         },
       },
+      leaderboardEntries: {
+        create: { userId: user.id },
+      },
     },
   });
 
@@ -934,6 +940,7 @@ export async function joinRoomAction(formData: FormData) {
       role: "MEMBER",
     },
   });
+  await refreshRoomLeaderboards(prisma, [room.id]);
 
   revalidatePath("/rooms");
   redirect(`/rooms/${room.id}`);
@@ -1847,108 +1854,57 @@ async function saveRoomMarketAnswers({
 }
 
 async function saveMatchMarketResults({
+  db = prisma,
   matchId,
   markets,
   formData,
 }: {
+  db?: typeof prisma | Prisma.TransactionClient;
   matchId: string;
   markets: RoomMarketKey[];
   formData: FormData;
 }) {
-  for (const market of markets) {
+  const results = markets.flatMap((market) => {
     const value = readMarketValue(formData, market, matchId);
-    const existing = await prisma.matchMarketResult.findUnique({
-      where: {
-        matchId_marketKey: {
-          matchId,
-          marketKey: market,
-        },
-      },
-      select: { id: true },
-    });
+    return value ? [{ market, value }] : [];
+  });
+  const activeMarkets = new Set(results.map((result) => result.market));
+  const removedMarkets = markets.filter((market) => !activeMarkets.has(market));
 
-    if (!value) {
-      if (existing) {
-        await prisma.matchMarketResult.delete({ where: { id: existing.id } });
-      }
-      continue;
-    }
-
-    await prisma.matchMarketResult.upsert({
-      where: {
-        matchId_marketKey: {
-          matchId,
-          marketKey: market,
-        },
-      },
-      update: { value },
-      create: {
-        matchId,
-        marketKey: market,
-        value,
-      },
+  if (removedMarkets.length > 0) {
+    await db.matchMarketResult.deleteMany({
+      where: { matchId, marketKey: { in: removedMarkets } },
     });
+  }
+
+  if (results.length > 0) {
+    const values = Prisma.join(
+      results.map(({ market, value }) =>
+        Prisma.sql`(
+          ${crypto.randomUUID()}::text,
+          ${matchId}::text,
+          ${market}::text,
+          ${JSON.stringify(value)}::jsonb,
+          CURRENT_TIMESTAMP,
+          CURRENT_TIMESTAMP
+        )`,
+      ),
+    );
+
+    await db.$executeRaw(Prisma.sql`
+      INSERT INTO "MatchMarketResult" (
+        id, "matchId", "marketKey", value, "createdAt", "updatedAt"
+      )
+      VALUES ${values}
+      ON CONFLICT ("matchId", "marketKey") DO UPDATE SET
+        value = EXCLUDED.value,
+        "updatedAt" = CURRENT_TIMESTAMP
+    `);
   }
 }
 
-async function recalculateScores(roomId?: string) {
-  const defaultRules = await getScoringRules();
-  const predictions = await prisma.prediction.findMany({
-    where: roomId ? { roomId } : undefined,
-    include: {
-      match: true,
-      room: {
-        include: {
-          ruleSet: true,
-        },
-      },
-    },
-  });
-
-  for (const prediction of predictions) {
-    const rules = prediction.room?.ruleSet
-      ? scoringRulesFromRoomRuleSet(prediction.room.ruleSet)
-      : defaultRules;
-
-    await prisma.prediction.update({
-      where: { id: prediction.id },
-      data: { points: scorePrediction(prediction.match, prediction, rules) },
-    });
-  }
-
-  const predictionAnswers = await prisma.predictionAnswer.findMany({
-    where: roomId ? { roomId } : undefined,
-    include: {
-      match: true,
-      room: {
-        include: {
-          ruleSet: true,
-        },
-      },
-    },
-  });
-  const marketResults = await prisma.matchMarketResult.findMany({
-    where: {
-      matchId: { in: Array.from(new Set(predictionAnswers.map((answer) => answer.matchId))) },
-    },
-  });
-  const marketResultByMatchAndKey = new Map(
-    marketResults.map((result) => [`${result.matchId}:${result.marketKey}`, result]),
-  );
-
-  for (const answer of predictionAnswers) {
-    await prisma.predictionAnswer.update({
-      where: { id: answer.id },
-      data: {
-        points: scoreMarketAnswer({
-          answer,
-          match: answer.match,
-          result: marketResultByMatchAndKey.get(`${answer.matchId}:${answer.marketKey}`),
-          pointsByMarket: roomMarketPoints(answer.room.ruleSet),
-        }),
-      },
-    });
-  }
+async function recalculateScores(roomId?: string, matchId?: string) {
+  return recalculateScoresInScope(prisma, { roomId, matchId });
 }
 
 export async function saveScoringSettingsAction(

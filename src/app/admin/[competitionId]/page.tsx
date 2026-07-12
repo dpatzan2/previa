@@ -20,6 +20,7 @@ import { formatAppDateTime } from "@/lib/timezone";
 import { CompetitionTabs } from "@/components/CompetitionTabs";
 import { DeleteCompetitionButton } from "@/components/DeleteCompetitionButton";
 import { SubmitButton } from "@/components/SubmitButton";
+import { AdminFormBehaviors } from "@/components/AdminFormBehaviors";
 import { redirect } from "next/navigation";
 
 const competitionStatuses = ["DRAFT", "ACTIVE", "ARCHIVED"] as const;
@@ -123,6 +124,7 @@ export default async function CompetitionDetailPage({
 
   return (
     <div className="page">
+      <AdminFormBehaviors />
       <Link className="back-link" href="/admin">
         <ArrowLeft size={16} />
         Competiciones
@@ -311,50 +313,6 @@ export default async function CompetitionDetailPage({
                   Crear fase
                 </SubmitButton>
               </form>
-              <script
-                dangerouslySetInnerHTML={{
-                  __html: `
-                    (function() {
-                      var formatSelect = document.getElementById('phase-format-select');
-                      var stageContainer = document.getElementById('stage-field-container');
-                      var groupContainer = document.getElementById('group-field-container');
-                      var conditionalContainer = document.getElementById('phase-conditional-container');
-                      
-                      if (!formatSelect || !stageContainer || !groupContainer || !conditionalContainer) return;
-                      
-                      function updateFields() {
-                        var val = formatSelect.value;
-                        if (val === 'LEAGUE') {
-                          conditionalContainer.style.display = 'none';
-                          var inp = groupContainer.querySelector('input');
-                          if (inp) inp.disabled = true;
-                          var sel = stageContainer.querySelector('select');
-                          if (sel) sel.disabled = true;
-                        } else if (val === 'KNOCKOUT') {
-                          conditionalContainer.style.display = 'grid';
-                          stageContainer.style.display = 'grid';
-                          groupContainer.style.display = 'none';
-                          var inp = groupContainer.querySelector('input');
-                          if (inp) inp.disabled = true;
-                          var sel = stageContainer.querySelector('select');
-                          if (sel) sel.disabled = false;
-                        } else { // GROUP
-                          conditionalContainer.style.display = 'grid';
-                          stageContainer.style.display = 'grid';
-                          groupContainer.style.display = 'grid';
-                          var inp = groupContainer.querySelector('input');
-                          if (inp) inp.disabled = false;
-                          var sel = stageContainer.querySelector('select');
-                          if (sel) sel.disabled = false;
-                        }
-                      }
-                      
-                      formatSelect.addEventListener('change', updateFields);
-                      updateFields();
-                    })();
-                  `
-                }}
-              />
             </div>
           </details>
 
@@ -450,40 +408,6 @@ export default async function CompetitionDetailPage({
                   Guardar equipo
                 </SubmitButton>
               </form>
-              <script
-                dangerouslySetInnerHTML={{
-                  __html: `
-                    (function() {
-                      var nameSelect = document.getElementById('team-name-select');
-                      var newTeamContainer = document.getElementById('new-team-name-container');
-                      var newTeamInput = document.getElementById('new-team-name-input');
-                      var newLogoContainer = document.getElementById('new-team-logo-container');
-                      var newLogoInput = document.getElementById('new-team-logo-input');
-                      
-                      if (!nameSelect || !newTeamContainer || !newTeamInput || !newLogoContainer || !newLogoInput) return;
-                      
-                      function updateTeamFields() {
-                        if (nameSelect.value === '__NEW__') {
-                          newTeamContainer.style.display = 'grid';
-                          newTeamInput.required = true;
-                          newTeamInput.disabled = false;
-                          newLogoContainer.style.display = 'grid';
-                          newLogoInput.disabled = false;
-                        } else {
-                          newTeamContainer.style.display = 'none';
-                          newTeamInput.required = false;
-                          newTeamInput.disabled = true;
-                          newLogoContainer.style.display = 'none';
-                          newLogoInput.disabled = true;
-                        }
-                      }
-                      
-                      nameSelect.addEventListener('change', updateTeamFields);
-                      updateTeamFields();
-                    })();
-                  `
-                }}
-              />
             </div>
           </details>
 
@@ -916,20 +840,6 @@ export default async function CompetitionDetailPage({
               })
             )}
           </div>
-          <script
-            dangerouslySetInnerHTML={{
-              __html: `
-                (function() {
-                  document.addEventListener('click', function(e) {
-                    var btn = e.target.closest('.add-match-btn');
-                    if (btn) {
-                      e.stopPropagation();
-                    }
-                  }, true);
-                })();
-              `
-            }}
-          />
         </div>
       )}
     </div>

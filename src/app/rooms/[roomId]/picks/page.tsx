@@ -5,7 +5,7 @@ import { RoomHeader } from "@/components/RoomHeader";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { teamName, withGuatemalaSchedule } from "@/lib/match-ui";
-import type { PeerPrediction } from "@/lib/match-ui";
+import type { DisplayMarketAnswer, PeerPrediction } from "@/lib/match-ui";
 import {
   canViewPeerPredictionsForMatch,
   computePhaseDeadlines,
@@ -218,7 +218,7 @@ export default async function RoomPicksPage({
     ? { id: { in: compMatches.map((m) => m.id) } }
     : {};
 
-  const [matches, predictions, peerPredictions, predictionAnswers] = await Promise.all([
+  const [matches, predictions, peerPredictions, predictionAnswers, marketResults] = await Promise.all([
     prisma.match.findMany({
       where: matchFilter,
       include: { homeTeam: true, awayTeam: true },
@@ -258,10 +258,21 @@ export default async function RoomPicksPage({
         marketKey: { in: roomMarkets },
       },
     }),
+    prisma.matchMarketResult.findMany({
+      where: competitionId ? { matchId: { in: compMatches.map((match) => match.id) } } : undefined,
+      select: { matchId: true, marketKey: true, value: true },
+    }),
   ]);
 
   const phaseDeadlines = computePhaseDeadlines(matches, new Date(), deadlineConfig);
   const matchById = new Map(matches.map((match) => [match.id, match]));
+  const bonusPointsByMatch = new Map<string, number>();
+  for (const answer of predictionAnswers) {
+    bonusPointsByMatch.set(
+      answer.matchId,
+      (bonusPointsByMatch.get(answer.matchId) ?? 0) + answer.points,
+    );
+  }
   const predictionMap = Object.fromEntries(
     predictions.map((item) => [
       item.matchId,
@@ -270,6 +281,7 @@ export default async function RoomPicksPage({
         predictedAwayScore: item.predictedAwayScore,
         predictedWinnerSide: item.predictedWinnerSide,
         points: item.points,
+        bonusPoints: bonusPointsByMatch.get(item.matchId) ?? 0,
       },
     ]),
   );
@@ -293,12 +305,27 @@ export default async function RoomPicksPage({
     peersByMatch[item.matchId].push(peer);
   }
 
-  const marketAnswers: Record<string, Partial<Record<RoomMarketKey, Record<string, unknown>>>> = {};
+  const marketAnswers: Record<string, Partial<Record<RoomMarketKey, DisplayMarketAnswer>>> = {};
   for (const answer of predictionAnswers) {
     if (!marketAnswers[answer.matchId]) marketAnswers[answer.matchId] = {};
-    marketAnswers[answer.matchId][answer.marketKey as RoomMarketKey] =
-      answer.value && typeof answer.value === "object" && !Array.isArray(answer.value)
-        ? (answer.value as Record<string, unknown>)
+    marketAnswers[answer.matchId][answer.marketKey as RoomMarketKey] = {
+      value:
+        answer.value && typeof answer.value === "object" && !Array.isArray(answer.value)
+          ? (answer.value as Record<string, unknown>)
+          : {},
+      points: answer.points,
+    };
+  }
+
+  const officialMarketResults: Record<
+    string,
+    Partial<Record<RoomMarketKey, Record<string, unknown>>>
+  > = {};
+  for (const result of marketResults) {
+    if (!officialMarketResults[result.matchId]) officialMarketResults[result.matchId] = {};
+    officialMarketResults[result.matchId][result.marketKey as RoomMarketKey] =
+      result.value && typeof result.value === "object" && !Array.isArray(result.value)
+        ? (result.value as Record<string, unknown>)
         : {};
   }
 
@@ -323,6 +350,7 @@ export default async function RoomPicksPage({
       homeScore: match.homeScore,
       awayScore: match.awayScore,
       actualWinnerSide: match.actualWinnerSide,
+      status: match.status,
       pickDeadlineLabel:
         match.stage === "GROUP" || !pickDeadline ? null : formatAppDateTime(pickDeadline),
     });
@@ -364,6 +392,7 @@ export default async function RoomPicksPage({
         phaseDeadlines={serializePhaseDeadlines(phaseDeadlines)}
         roomMarkets={roomMarkets}
         marketAnswers={marketAnswers}
+        officialMarketResults={officialMarketResults}
         deadlineMode={deadlineConfig.mode}
         deadlineHoursBefore={deadlineConfig.hoursBefore}
       />

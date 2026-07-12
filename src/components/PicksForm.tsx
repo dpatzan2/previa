@@ -8,7 +8,8 @@ import { MatchPickCard } from "@/components/MatchPickCard";
 import { PhaseTabs } from "@/components/PhaseTabs";
 import { RoomMarketFields } from "@/components/RoomMarketFields";
 import { SubmitButton } from "@/components/SubmitButton";
-import type { DisplayMatch, DisplayPrediction, PeerPrediction } from "@/lib/match-ui";
+import { PredictionResultSummary } from "@/components/PredictionResultSummary";
+import type { DisplayMarketAnswer, DisplayMatch, DisplayPrediction, PeerPrediction } from "@/lib/match-ui";
 import {
   canViewPeerPredictions,
   deadlinesByStage,
@@ -21,8 +22,6 @@ import { stageLabels } from "@/lib/stages";
 import type { MatchStage } from "@prisma/client";
 import type { RoomMarketKey } from "@/lib/room-presets";
 
-type MarketAnswerValue = Record<string, unknown>;
-
 type PicksFormProps = {
   matches: DisplayMatch[];
   predictions: Record<string, DisplayPrediction>;
@@ -32,7 +31,11 @@ type PicksFormProps = {
   phaseDeadlines: SerializedPhaseDeadline[];
   roomId?: string;
   roomMarkets?: RoomMarketKey[];
-  marketAnswers?: Record<string, Partial<Record<RoomMarketKey, MarketAnswerValue>>>;
+  marketAnswers?: Record<string, Partial<Record<RoomMarketKey, DisplayMarketAnswer>>>;
+  officialMarketResults?: Record<
+    string,
+    Partial<Record<RoomMarketKey, Record<string, unknown>>>
+  >;
   deadlineMode?: PickDeadlineMode;
   deadlineHoursBefore?: number;
 };
@@ -47,6 +50,7 @@ export function PicksForm({
   roomId,
   roomMarkets = [],
   marketAnswers = {},
+  officialMarketResults = {},
   deadlineMode,
   deadlineHoursBefore,
 }: PicksFormProps) {
@@ -125,6 +129,16 @@ export function PicksForm({
                         phaseStartsLabel={deadline?.startsLabel}
                         hidden={!isVisible}
                       />
+                      {isVisible ? (
+                        <PredictionResultSummary
+                          match={match}
+                          scorePoints={prediction?.points ?? 0}
+                          predictedHomeScore={prediction?.predictedHomeScore ?? null}
+                          predictedAwayScore={prediction?.predictedAwayScore ?? null}
+                          answers={marketAnswers[match.id] ?? {}}
+                          officialResults={officialMarketResults[match.id] ?? {}}
+                        />
+                      ) : null}
                       {isVisible && roomMarkets.length > 0 ? (
                         <details className="picks-market-details" style={{ marginTop: "12px", border: "1px dashed var(--line)", borderRadius: "6px", padding: "10px 14px", background: "var(--panel-soft)" }}>
                           <summary style={{ cursor: "pointer", fontWeight: "bold", fontSize: "0.88rem", color: "var(--primary)" }}>
@@ -134,7 +148,12 @@ export function PicksForm({
                             <RoomMarketFields
                               match={match}
                               markets={roomMarkets}
-                              answers={marketAnswers[match.id] ?? {}}
+                              answers={Object.fromEntries(
+                                Object.entries(marketAnswers[match.id] ?? {}).map(([key, answer]) => [
+                                  key,
+                                  answer?.value ?? {},
+                                ]),
+                              )}
                             />
                           </div>
                         </details>

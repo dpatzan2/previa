@@ -130,3 +130,10 @@ export function scoreMarketAnswer({
 
   return isCorrect ? pointsByMarket[market] ?? 0 : 0;
 }
+
+export function scoreEnabledMarketAnswer(
+  input: Parameters<typeof scoreMarketAnswer>[0] & { enabledMarkets: ReadonlySet<string> },
+) {
+  if (!input.enabledMarkets.has(input.answer.marketKey)) return 0;
+  return scoreMarketAnswer(input);
+}
