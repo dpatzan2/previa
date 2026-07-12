@@ -8,17 +8,29 @@ import { FormFeedback, useActionFeedback } from "@/components/FormFeedback";
 import { PhaseTabs } from "@/components/PhaseTabs";
 import { SubmitButton } from "@/components/SubmitButton";
 import type { DisplayMatch, TeamOption } from "@/lib/match-ui";
+import type { RoomMarketKey } from "@/lib/room-presets";
 import { stageLabels } from "@/lib/stages";
 import type { MatchStage } from "@prisma/client";
+
+type MarketAnswerValue = Record<string, unknown>;
 
 type AdminResultsFormProps = {
   matches: DisplayMatch[];
   teams: TeamOption[];
   groupCodes: string[];
   stages: MatchStage[];
+  bonusMarkets: RoomMarketKey[];
+  marketResults: Record<string, Partial<Record<RoomMarketKey, MarketAnswerValue>>>;
 };
 
-export function AdminResultsForm({ matches, teams, groupCodes, stages }: AdminResultsFormProps) {
+export function AdminResultsForm({
+  matches,
+  teams,
+  groupCodes,
+  stages,
+  bonusMarkets,
+  marketResults,
+}: AdminResultsFormProps) {
   const [state, action, isPending] = useActionState(saveResultsAction, null);
   const feedback = useActionFeedback(state);
 
@@ -53,6 +65,8 @@ export function AdminResultsForm({ matches, teams, groupCodes, stages }: AdminRe
                       key={match.id}
                       match={match}
                       teams={teams}
+                      bonusMarkets={bonusMarkets}
+                      marketResults={marketResults[match.id] ?? {}}
                       hidden={!isVisible}
                     />
                   );

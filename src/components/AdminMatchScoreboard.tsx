@@ -1,8 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { RoomMarketFields } from "@/components/RoomMarketFields";
 import { TeamLabel } from "@/components/TeamLabel";
 import type { DisplayMatch, TeamOption } from "@/lib/match-ui";
+import type { RoomMarketKey } from "@/lib/room-presets";
+
+type MarketAnswerValue = Record<string, unknown>;
 
 function teamLabelFor(id: string | null, teams: TeamOption[], fallback: string) {
   if (!id) return fallback;
@@ -12,10 +16,14 @@ function teamLabelFor(id: string | null, teams: TeamOption[], fallback: string) 
 export function AdminMatchScoreboard({
   match,
   teams,
+  bonusMarkets,
+  marketResults,
   hidden = false,
 }: {
   match: DisplayMatch;
   teams: TeamOption[];
+  bonusMarkets: RoomMarketKey[];
+  marketResults: Partial<Record<RoomMarketKey, MarketAnswerValue>>;
   hidden?: boolean;
 }) {
   const [homeTeamId, setHomeTeamId] = useState(match.homeTeamId ?? "");
@@ -111,6 +119,13 @@ export function AdminMatchScoreboard({
             <option value="AWAY">{awayName} pasa</option>
           </select>
         </div>
+      ) : null}
+
+      {bonusMarkets.length > 0 ? (
+        <details className="admin-market-results">
+          <summary>Resultados bonus</summary>
+          <RoomMarketFields match={match} markets={bonusMarkets} answers={marketResults} />
+        </details>
       ) : null}
     </article>
   );

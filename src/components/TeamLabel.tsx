@@ -1,4 +1,3 @@
-import Image from "next/image";
 import { flagUrlForTeam } from "@/lib/flags";
 
 export function TeamLabel({
@@ -13,13 +12,11 @@ export function TeamLabel({
   return (
     <span className={compact ? "team-label compact" : "team-label"}>
       {flagUrl ? (
-        <Image
+        <img
           className="team-flag"
           src={flagUrl}
-          alt={`Bandera de ${name}`}
-          width={28}
-          height={20}
-          unoptimized
+          alt={`Escudo de ${name}`}
+          style={{ width: "28px", height: "20px", objectFit: "contain", flexShrink: 0 }}
         />
       ) : (
         <span className="team-flag placeholder" aria-hidden="true" />

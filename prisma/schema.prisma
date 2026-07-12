@@ -32,6 +32,49 @@ enum PickSide {
   AWAY
 }
 
+enum RoomMemberRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum RoomStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum TournamentType {
+  WORLD_CUP
+  INTERNATIONAL_CUP
+  CLUB_TOURNAMENT
+  DOMESTIC_LEAGUE
+  CUSTOM
+}
+
+enum RoomConfigPreset {
+  BASIC
+  INTERMEDIATE
+  COMPLETE
+  CUSTOM
+}
+
+enum RoomDeadlineMode {
+  PER_MATCH
+  PHASE
+}
+
+enum CompetitionStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum CompetitionPhaseFormat {
+  GROUP
+  KNOCKOUT
+  LEAGUE
+}
+
 model User {
   id             String       @id @default(cuid())
   username       String       @unique
@@ -42,6 +85,9 @@ model User {
   canParticipate Boolean      @default(true)
   sessions       Session[]
   predictions    Prediction[]
+  predictionAnswers PredictionAnswer[]
+  ownedRooms     Room[]       @relation("RoomOwner")
+  roomMembers    RoomMember[]
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 }
@@ -63,12 +109,98 @@ model Team {
   name           String       @unique
   normalizedName String       @unique
   groupCode      String?
+  logoUrl        String?
   homeMatches    Match[]      @relation("HomeTeam")
   awayMatches    Match[]      @relation("AwayTeam")
   actualWins     Match[]      @relation("ActualWinner")
   predictions    Prediction[]
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
+}
+
+model Competition {
+  id          String             @id @default(cuid())
+  name        String
+  slug        String             @unique
+  type        TournamentType
+  status      CompetitionStatus  @default(DRAFT)
+  season      String?
+  timezone    String             @default("America/Guatemala")
+  startsAt    DateTime?
+  endsAt      DateTime?
+  phases      CompetitionPhase[]
+  teams       CompetitionTeam[]
+  matches     CompetitionMatch[]
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  @@index([status])
+  @@index([type])
+}
+
+model CompetitionPhase {
+  id            String                 @id @default(cuid())
+  competitionId String
+  name          String
+  stage         MatchStage?
+  format        CompetitionPhaseFormat
+  sortOrder     Int                    @default(0)
+  groupCode     String?
+  startsAt      DateTime?
+  endsAt        DateTime?
+  competition   Competition            @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  matches       CompetitionMatch[]
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+
+  @@index([competitionId])
+  @@index([format])
+  @@unique([competitionId, sortOrder])
+}
+
+model CompetitionTeam {
+  id             String             @id @default(cuid())
+  competitionId  String
+  name           String
+  normalizedName String
+  groupCode      String?
+  logoUrl        String?
+  competition    Competition        @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  homeMatches    CompetitionMatch[] @relation("CompetitionHomeTeam")
+  awayMatches    CompetitionMatch[] @relation("CompetitionAwayTeam")
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  @@index([competitionId])
+  @@index([groupCode])
+  @@unique([competitionId, normalizedName])
+}
+
+model CompetitionMatch {
+  id               String           @id @default(cuid())
+  competitionId    String
+  phaseId          String?
+  matchNumber      Int?
+  kickoffAt        DateTime?
+  venue            String?
+  homeTeamId       String?
+  awayTeamId       String?
+  homePlaceholder  String?
+  awayPlaceholder  String?
+  status           MatchStatus      @default(SCHEDULED)
+  homeScore        Int?
+  awayScore        Int?
+  competition      Competition      @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  phase            CompetitionPhase? @relation(fields: [phaseId], references: [id], onDelete: SetNull)
+  homeTeam         CompetitionTeam?  @relation("CompetitionHomeTeam", fields: [homeTeamId], references: [id])
+  awayTeam         CompetitionTeam?  @relation("CompetitionAwayTeam", fields: [awayTeamId], references: [id])
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@index([competitionId])
+  @@index([phaseId])
+  @@index([kickoffAt])
+  @@unique([competitionId, matchNumber])
 }
 
 model Match {
@@ -95,6 +227,8 @@ model Match {
   awayTeam           Team?        @relation("AwayTeam", fields: [awayTeamId], references: [id])
   actualWinnerTeam   Team?        @relation("ActualWinner", fields: [actualWinnerTeamId], references: [id])
   predictions        Prediction[]
+  predictionAnswers  PredictionAnswer[]
+  marketResults      MatchMarketResult[]
   createdAt          DateTime     @default(now())
   updatedAt          DateTime     @updatedAt
 
@@ -102,10 +236,66 @@ model Match {
   @@index([kickoffAt])
 }
 
+model Room {
+  id                   String           @id @default(cuid())
+  name                 String
+  accessCode           String           @unique
+  tournamentType       TournamentType
+  tournamentName       String
+  externalTournamentId String?
+  configPreset         RoomConfigPreset @default(BASIC)
+  deadlineMode         RoomDeadlineMode @default(PER_MATCH)
+  deadlineHoursBefore  Int              @default(1)
+  status               RoomStatus       @default(ACTIVE)
+  ownerId              String
+  owner                User             @relation("RoomOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members              RoomMember[]
+  ruleSet              RoomRuleSet?
+  predictions          Prediction[]
+  predictionAnswers    PredictionAnswer[]
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+
+  @@index([ownerId])
+  @@index([status])
+  @@index([tournamentType])
+}
+
+model RoomMember {
+  id        String         @id @default(cuid())
+  roomId    String
+  userId    String
+  role      RoomMemberRole @default(MEMBER)
+  joinedAt  DateTime       @default(now())
+  room      Room           @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@unique([roomId, userId])
+  @@index([userId])
+  @@index([role])
+}
+
+model RoomRuleSet {
+  id                    String           @id @default(cuid())
+  roomId                String           @unique
+  preset                RoomConfigPreset @default(BASIC)
+  exactScorePoints      Int              @default(3)
+  outcomePoints         Int              @default(1)
+  advancePickPoints     Int              @default(1)
+  enabledMarkets        Json
+  customMarketConfig    Json?
+  room                  Room             @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+}
+
 model Prediction {
   id                    String    @id @default(cuid())
   userId                String
   matchId               String
+  roomId                String?
   predictedHomeScore    Int?
   predictedAwayScore    Int?
   predictedWinnerTeamId String?
@@ -113,12 +303,48 @@ model Prediction {
   points                Int       @default(0)
   user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   match                 Match     @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  room                  Room?     @relation(fields: [roomId], references: [id], onDelete: Cascade)
   predictedWinnerTeam   Team?     @relation(fields: [predictedWinnerTeamId], references: [id])
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
-  @@unique([userId, matchId])
+  @@unique([roomId, userId, matchId])
+  @@index([userId, matchId])
   @@index([matchId])
+  @@index([roomId])
+}
+
+model PredictionAnswer {
+  id        String   @id @default(cuid())
+  roomId    String
+  userId    String
+  matchId   String
+  marketKey String
+  value     Json
+  points    Int      @default(0)
+  room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  match     Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([roomId, userId, matchId, marketKey])
+  @@index([roomId, matchId])
+  @@index([userId])
+  @@index([marketKey])
+}
+
+model MatchMarketResult {
+  id        String   @id @default(cuid())
+  matchId   String
+  marketKey String
+  value     Json
+  match     Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([matchId, marketKey])
+  @@index([marketKey])
 }
 
 model ScoringSettings {

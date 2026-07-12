@@ -2,10 +2,11 @@
 
 import { Save } from "lucide-react";
 import { useActionState, useMemo, useState } from "react";
-import { savePredictionsAction } from "@/app/actions";
+import { savePredictionsAction, saveRoomPredictionsAction } from "@/app/actions";
 import { FormFeedback, useActionFeedback } from "@/components/FormFeedback";
 import { MatchPickCard } from "@/components/MatchPickCard";
 import { PhaseTabs } from "@/components/PhaseTabs";
+import { RoomMarketFields } from "@/components/RoomMarketFields";
 import { SubmitButton } from "@/components/SubmitButton";
 import type { DisplayMatch, DisplayPrediction, PeerPrediction } from "@/lib/match-ui";
 import {
@@ -13,10 +14,14 @@ import {
   deadlinesByStage,
   firstEnterableStage,
   phaseDeadlineBanner,
+  type PickDeadlineMode,
   type SerializedPhaseDeadline,
 } from "@/lib/phase-deadlines";
 import { stageLabels } from "@/lib/stages";
 import type { MatchStage } from "@prisma/client";
+import type { RoomMarketKey } from "@/lib/room-presets";
+
+type MarketAnswerValue = Record<string, unknown>;
 
 type PicksFormProps = {
   matches: DisplayMatch[];
@@ -25,6 +30,11 @@ type PicksFormProps = {
   groupCodes: string[];
   stages: MatchStage[];
   phaseDeadlines: SerializedPhaseDeadline[];
+  roomId?: string;
+  roomMarkets?: RoomMarketKey[];
+  marketAnswers?: Record<string, Partial<Record<RoomMarketKey, MarketAnswerValue>>>;
+  deadlineMode?: PickDeadlineMode;
+  deadlineHoursBefore?: number;
 };
 
 export function PicksForm({
@@ -34,6 +44,11 @@ export function PicksForm({
   groupCodes,
   stages,
   phaseDeadlines,
+  roomId,
+  roomMarkets = [],
+  marketAnswers = {},
+  deadlineMode,
+  deadlineHoursBefore,
 }: PicksFormProps) {
   const deadlineMap = deadlinesByStage(phaseDeadlines);
   const hasOpenPhases = useMemo(
@@ -44,11 +59,13 @@ export function PicksForm({
     () => firstEnterableStage(stages, deadlinesByStage(phaseDeadlines)),
   );
   const activePhaseLocked = deadlineMap[activeStage]?.locked ?? false;
-  const [saveState, saveAction, isSaving] = useActionState(savePredictionsAction, null);
+  const saveHandler = roomId ? saveRoomPredictionsAction : savePredictionsAction;
+  const [saveState, saveAction, isSaving] = useActionState(saveHandler, null);
   const feedback = useActionFeedback(saveState);
 
   return (
     <form action={saveAction} className="prediction-form">
+      {roomId ? <input type="hidden" name="roomId" value={roomId} /> : null}
       <PhaseTabs
         availableStages={stages}
         groupCodes={groupCodes}
@@ -63,7 +80,13 @@ export function PicksForm({
             return true;
           });
           const deadline = deadlineMap[stage];
-          const banner = deadline ? phaseDeadlineBanner(deadline, { editable: true }) : null;
+          const banner = deadline
+            ? phaseDeadlineBanner(deadline, {
+                editable: true,
+                deadlineMode,
+                deadlineHoursBefore,
+              })
+            : null;
 
           return (
             <section className="panel scoreboard-panel">
@@ -93,15 +116,30 @@ export function PicksForm({
                     match.peerPicksVisible ?? canViewPeerPredictions(deadline);
 
                   return (
-                    <MatchPickCard
-                      key={match.id}
-                      match={match}
-                      prediction={prediction}
-                      peers={peersByMatch[match.id] ?? []}
-                      peerPicksVisible={peerPicksVisible}
-                      phaseStartsLabel={deadline?.startsLabel}
-                      hidden={!isVisible}
-                    />
+                    <div className={isVisible ? "match-pick-stack" : "match-pick-stack is-hidden"} key={match.id}>
+                      <MatchPickCard
+                        match={match}
+                        prediction={prediction}
+                        peers={peersByMatch[match.id] ?? []}
+                        peerPicksVisible={peerPicksVisible}
+                        phaseStartsLabel={deadline?.startsLabel}
+                        hidden={!isVisible}
+                      />
+                      {isVisible && roomMarkets.length > 0 ? (
+                        <details className="picks-market-details" style={{ marginTop: "12px", border: "1px dashed var(--line)", borderRadius: "6px", padding: "10px 14px", background: "var(--panel-soft)" }}>
+                          <summary style={{ cursor: "pointer", fontWeight: "bold", fontSize: "0.88rem", color: "var(--primary)" }}>
+                            Pronósticos de Bonus (Opcional)
+                          </summary>
+                          <div style={{ marginTop: "10px" }}>
+                            <RoomMarketFields
+                              match={match}
+                              markets={roomMarkets}
+                              answers={marketAnswers[match.id] ?? {}}
+                            />
+                          </div>
+                        </details>
+                      ) : null}
+                    </div>
                   );
                 })}
               </div>

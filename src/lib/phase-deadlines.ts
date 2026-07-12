@@ -6,6 +6,13 @@ const MS_DAY = 24 * 60 * 60 * 1000;
 const MS_HOUR = 60 * 60 * 1000;
 const DEVELOPMENT_PHASE_UNLOCKS = process.env.NODE_ENV === "development";
 
+export type PickDeadlineMode = "LEGACY" | "PER_MATCH" | "PHASE";
+
+export type PickDeadlineConfig = {
+  mode?: PickDeadlineMode;
+  hoursBefore?: number;
+};
+
 export type PhaseDeadlineInfo = {
   stage: MatchStage;
   startsAt: Date;
@@ -50,12 +57,31 @@ function phaseDeadlineAt(stage: MatchStage, startsAt: Date) {
   return new Date(startsAt.getTime() - MS_HOUR);
 }
 
+function normalizedDeadlineHours(hoursBefore?: number) {
+  if (typeof hoursBefore !== "number" || !Number.isFinite(hoursBefore)) return 1;
+  return Math.max(0, Math.min(168, Math.trunc(hoursBefore)));
+}
+
+function configuredPhaseDeadlineAt(startsAt: Date, config?: PickDeadlineConfig) {
+  if (config?.mode === "PHASE") {
+    return new Date(startsAt.getTime() - normalizedDeadlineHours(config.hoursBefore) * MS_HOUR);
+  }
+  return null;
+}
+
 function isGroupStage(stage: MatchStage) {
   return stage === "GROUP";
 }
 
-export function matchDeadlineAt(match: { stage: MatchStage; kickoffAt?: Date | null }) {
+export function matchDeadlineAt(
+  match: { stage: MatchStage; kickoffAt?: Date | null },
+  config?: PickDeadlineConfig,
+) {
   if (!match.kickoffAt) return null;
+  if (config?.mode === "PER_MATCH") {
+    return new Date(match.kickoffAt.getTime() - normalizedDeadlineHours(config.hoursBefore) * MS_HOUR);
+  }
+  if (config?.mode === "PHASE") return null;
   if (isGroupStage(match.stage)) {
     return atAppDay22Hours(new Date(match.kickoffAt.getTime() - MS_DAY));
   }
@@ -75,6 +101,7 @@ export function isStageComplete(
 export function computePhaseDeadlines(
   matches: MatchForPhaseDeadlines[],
   now = new Date(),
+  config: PickDeadlineConfig = {},
 ): Map<MatchStage, PhaseDeadlineInfo> {
   const firstKickoffByStage = new Map<MatchStage, Date>();
   const latestDeadlineByStage = new Map<MatchStage, Date>();
@@ -86,7 +113,7 @@ export function computePhaseDeadlines(
       firstKickoffByStage.set(match.stage, match.kickoffAt);
     }
 
-    const matchDeadline = isGroupStage(match.stage) ? null : matchDeadlineAt(match);
+    const matchDeadline = config.mode === "PER_MATCH" ? matchDeadlineAt(match, config) : null;
     const latestDeadline = latestDeadlineByStage.get(match.stage);
     if (matchDeadline && (!latestDeadline || matchDeadline > latestDeadline)) {
       latestDeadlineByStage.set(match.stage, matchDeadline);
@@ -96,7 +123,11 @@ export function computePhaseDeadlines(
   const deadlines = new Map<MatchStage, PhaseDeadlineInfo>();
 
   for (const [stage, startsAt] of firstKickoffByStage) {
-    const deadlineAt = latestDeadlineByStage.get(stage) ?? phaseDeadlineAt(stage, startsAt);
+    const configuredPhaseDeadline = configuredPhaseDeadlineAt(startsAt, config);
+    const deadlineAt =
+      latestDeadlineByStage.get(stage) ??
+      configuredPhaseDeadline ??
+      phaseDeadlineAt(stage, startsAt);
     const peerVisibilityAt = deadlineAt;
     const deadlineLocked = !DEVELOPMENT_PHASE_UNLOCKS && now >= deadlineAt;
     const previousStage = previousStageForUnlock(stage);
@@ -138,16 +169,17 @@ export function canViewPeerPredictionsForMatch(
   match: { stage: MatchStage; kickoffAt?: Date | null },
   deadlines: Map<MatchStage, PhaseDeadlineInfo>,
   now = new Date(),
+  config: PickDeadlineConfig = {},
 ) {
   if (DEVELOPMENT_PHASE_UNLOCKS) return true;
-  if (isGroupStage(match.stage)) {
+  if (config.mode !== "PER_MATCH" && isGroupStage(match.stage)) {
     return canViewPeerPredictions(deadlines.get(match.stage));
   }
 
   const phase = deadlines.get(match.stage);
   if (phase?.sequentialLocked) return false;
 
-  const deadlineAt = matchDeadlineAt(match);
+  const deadlineAt = matchDeadlineAt(match, config);
   return deadlineAt ? now >= deadlineAt : canViewPeerPredictions(phase);
 }
 
@@ -182,9 +214,23 @@ export function phaseTabStatusLabel(deadline: SerializedPhaseDeadline) {
   return `Partidos hasta ${deadline.deadlineLabel} GT`;
 }
 
+export function roomDeadlineConfig(room: {
+  deadlineMode?: "PER_MATCH" | "PHASE";
+  deadlineHoursBefore?: number;
+}): PickDeadlineConfig {
+  return {
+    mode: room.deadlineMode ?? "PER_MATCH",
+    hoursBefore: room.deadlineHoursBefore ?? 1,
+  };
+}
+
 export function phaseDeadlineBanner(
   deadline: SerializedPhaseDeadline,
-  { editable = false }: { editable?: boolean } = {},
+  {
+    editable = false,
+    deadlineMode,
+    deadlineHoursBefore,
+  }: { editable?: boolean; deadlineMode?: PickDeadlineMode; deadlineHoursBefore?: number } = {},
 ) {
   if (deadline.deadlineLocked) {
     return {
@@ -211,10 +257,18 @@ export function phaseDeadlineBanner(
     closed: false,
     title: "Limite de pronosticos",
     message: editable
-      ? deadline.stage === "GROUP"
+      ? deadlineMode === "PER_MATCH"
+        ? `Puedes editar cada partido hasta ${normalizedDeadlineHours(deadlineHoursBefore)} hora(s) antes de su inicio.`
+        : deadlineMode === "PHASE"
+          ? `Puedes editar esta fase hasta ${normalizedDeadlineHours(deadlineHoursBefore)} hora(s) antes del primer partido.`
+          : deadline.stage === "GROUP"
         ? `Puedes editar hasta el ${deadline.deadlineLabel} (hora Guatemala), un dia antes del inicio el ${deadline.startsLabel}.`
         : "Puedes editar cada partido hasta 1 hora antes de su inicio."
-      : deadline.stage === "GROUP"
+      : deadlineMode === "PER_MATCH"
+        ? `Cada partido se puede pronosticar hasta ${normalizedDeadlineHours(deadlineHoursBefore)} hora(s) antes de su inicio.`
+        : deadlineMode === "PHASE"
+          ? `La fase completa se puede pronosticar hasta ${normalizedDeadlineHours(deadlineHoursBefore)} hora(s) antes del primer partido.`
+          : deadline.stage === "GROUP"
         ? `Hasta el ${deadline.deadlineLabel} (hora Guatemala, un dia antes del inicio el ${deadline.startsLabel}).`
         : "Cada partido se puede pronosticar hasta 1 hora antes de su inicio.",
   };
@@ -231,13 +285,14 @@ export function isMatchLockedForPicks(
   match: { stage: MatchStage; kickoffAt?: Date | null },
   deadlines: Map<MatchStage, PhaseDeadlineInfo>,
   now = new Date(),
+  config: PickDeadlineConfig = {},
 ) {
   if (DEVELOPMENT_PHASE_UNLOCKS) return false;
   const phase = deadlines.get(match.stage);
   if (phase?.sequentialLocked) return true;
-  if (isGroupStage(match.stage)) return phase?.deadlineLocked ?? false;
+  if (config.mode !== "PER_MATCH" && isGroupStage(match.stage)) return phase?.deadlineLocked ?? false;
 
-  const deadlineAt = matchDeadlineAt(match);
+  const deadlineAt = matchDeadlineAt(match, config);
   if (!deadlineAt) return phase?.locked ?? false;
 
   return now >= deadlineAt;

@@ -11,13 +11,13 @@ export default function LoginPage({
   return (
     <section className="login-wrap">
       <div className="login-panel">
-        <div className="login-head">
-          <span className="brand-mark">
-            <Lock size={22} />
+        <div className="login-head" style={{ display: "flex", alignItems: "center", gap: "14px", marginBottom: "20px" }}>
+          <span className="brand-mark" style={{ border: "none", background: "transparent", padding: 0, width: "48px", height: "48px", flexShrink: 0 }}>
+            <img src="/logo-previa-shield.png" alt="Previa Logo" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
           </span>
           <div>
-            <h1>Ingreso</h1>
-            <p>Quiniela Mundial 2026</p>
+            <h1 style={{ fontSize: "1.45rem", fontWeight: 850 }}>Ingreso</h1>
+            <p style={{ color: "var(--muted)", fontSize: "0.88rem", margin: "2px 0 0" }}>Quiniela Previa</p>
           </div>
         </div>
         <LoginForm searchParams={searchParams} />
