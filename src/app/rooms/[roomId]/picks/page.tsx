@@ -245,7 +245,7 @@ export default async function RoomPicksPage({
   const championDeadline = championPickDeadlineAt(competition.matches, room.deadlineHoursBefore);
 
   return (
-    <div className="page">
+    <div className="page room-picks-page">
       <Link className="back-link" href="/rooms"><ArrowLeft size={16} />Volver a salas</Link>
       <RoomHeader roomId={room.id} roomName={room.name} accessCode={room.accessCode} activeTab="picks" canManage={canManage} />
       <PicksForm
