@@ -1777,6 +1777,7 @@ input:disabled {
 }
 
 .market-choice {
+  position: relative; /* ponytail: sin esto el radio absolute se ancla al viewport y desborda a la derecha */
   min-width: 0;
   cursor: pointer;
 }
