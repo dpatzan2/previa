@@ -1,4 +1,4 @@
-import type { Match, MatchMarketResult, PredictionAnswer, RoomRuleSet } from "@prisma/client";
+import type { MatchMarketResult, PredictionAnswer, RoomRuleSet } from "@prisma/client";
 import { roomMarketCatalog, type RoomMarketKey } from "@/lib/room-presets";
 
 type JsonRecord = Record<string, unknown>;
@@ -68,7 +68,11 @@ export function scoreMarketAnswer({
   pointsByMarket,
 }: {
   answer: Pick<PredictionAnswer, "marketKey" | "value">;
-  match: Pick<Match, "status" | "homeScore" | "awayScore">;
+  match: {
+    status: "SCHEDULED" | "LIVE" | "FINISHED";
+    homeScore: number | null;
+    awayScore: number | null;
+  };
   result?: Pick<MatchMarketResult, "value"> | null;
   pointsByMarket: Record<RoomMarketKey, number>;
 }) {

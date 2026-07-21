@@ -71,6 +71,15 @@ export function formatAppDate(date: Date) {
   }).format(date);
 }
 
+export function formatAppDateKey(date: Date) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: APP_TIMEZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
 /** Etiquetas legibles desde kickoffAt; si no hay, usa las del fixture. */
 export function matchScheduleLabels(
   kickoffAt: Date | null | undefined,

@@ -351,6 +351,28 @@ export function bonusMarketsFor(enabledMarkets: RoomMarketKey[]) {
   );
 }
 
+const knockoutOnlyMarkets = new Set<RoomMarketKey>([
+  "ADVANCING_TEAM",
+  "EXTRA_TIME",
+  "PENALTY_SHOOTOUT",
+]);
+
+export function marketsForStage(
+  markets: RoomMarketKey[],
+  stage: string,
+) {
+  return stage === "GROUP"
+    ? markets.filter((market) => !knockoutOnlyMarkets.has(market))
+    : markets;
+}
+
+export function bonusMarketsForStage(
+  enabledMarkets: RoomMarketKey[],
+  stage: string,
+) {
+  return bonusMarketsFor(marketsForStage(enabledMarkets, stage));
+}
+
 export function roomPresetDescription(preset: RoomConfigPreset) {
   if (preset === "BASIC") {
     return "Marcador, resultado y quien pasa en eliminatorias.";

@@ -76,23 +76,6 @@ export default async function RoomSettingsPage({
   const enabledMarkets = enabledMarketsFrom(room.ruleSet?.enabledMarkets);
   const customMarketPoints = marketPointsFrom(room.ruleSet?.customMarketConfig);
 
-  // Auto-healing logic: link existing rooms to competition by matching name if externalTournamentId is null
-  let competitionId = room.externalTournamentId;
-  if (!competitionId && room.tournamentName) {
-    const matchingComp = await prisma.competition.findFirst({
-      where: { name: room.tournamentName },
-      select: { id: true }
-    });
-    if (matchingComp) {
-      competitionId = matchingComp.id;
-      await prisma.room.update({
-        where: { id: room.id },
-        data: { externalTournamentId: competitionId }
-      });
-      room.externalTournamentId = competitionId;
-    }
-  }
-
   const competitions = await prisma.competition.findMany({
     where: { status: "ACTIVE" },
     orderBy: { name: "asc" },
@@ -261,6 +244,43 @@ export default async function RoomSettingsPage({
                 defaultValue={room.deadlineHoursBefore}
               />
             </label>
+          </fieldset>
+
+          <fieldset className="room-preset-fieldset compact">
+            <legend>Experiencia de pronosticos</legend>
+            <label>
+              Predicciones populares
+              <select
+                name="popularPredictionsVisibility"
+                defaultValue={room.popularPredictionsVisibility}
+              >
+                <option value="ALWAYS">Mostrar siempre</option>
+                <option value="AFTER_PICK">Despues de hacer mi pick</option>
+                <option value="AFTER_DEADLINE">Despues del cierre</option>
+                <option value="HIDDEN">No mostrar</option>
+              </select>
+              <small>Los resultados son porcentajes anonimos.</small>
+            </label>
+            <div className="room-inline-settings">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  name="championPickEnabled"
+                  defaultChecked={room.championPickEnabled}
+                />
+                Permitir pronostico de campeon
+              </label>
+              <label className="room-inline-number">
+                Puntos por acertar
+                <input
+                  type="number"
+                  name="championPickPoints"
+                  min="0"
+                  max="99"
+                  defaultValue={room.championPickPoints}
+                />
+              </label>
+            </div>
           </fieldset>
 
           <div className="scoring-rules-grid">

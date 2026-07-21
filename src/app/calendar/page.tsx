@@ -1,198 +1,217 @@
 import Link from "next/link";
-import { CalendarDays } from "lucide-react";
+import { BarChart3, CalendarDays, Clock3, MapPin } from "lucide-react";
+import { CalendarSyncButtons } from "@/components/CalendarSyncButtons";
+import { TeamLabel } from "@/components/TeamLabel";
 import { requireUser } from "@/lib/auth";
+import {
+  calculateBestThirds,
+  calculateStandings,
+  type FormResult,
+  type StandingRow,
+} from "@/lib/competition-insights";
 import { prisma } from "@/lib/db";
 import { tournamentTypeLabels } from "@/lib/room-presets";
-import { formatAppDateTime } from "@/lib/timezone";
+import { formatAppDate, formatAppDateKey, formatAppTime } from "@/lib/timezone";
 
-import { CalendarSyncButtons } from "@/components/CalendarSyncButtons";
-
-const statusLabels = {
-  DRAFT: "Borrador",
-  ACTIVE: "Activa",
-  ARCHIVED: "Archivada",
-};
+const statusLabels = { DRAFT: "Borrador", ACTIVE: "Activa", ARCHIVED: "Archivada" };
 
 export default async function CalendarPage({
   searchParams,
 }: {
-  searchParams: Promise<{ competition?: string }>;
+  searchParams: Promise<{ competition?: string; view?: string }>;
 }) {
   await requireUser();
   const query = await searchParams;
   const competitions = await prisma.competition.findMany({
     where: { status: "ACTIVE" },
     include: {
+      teams: { orderBy: { name: "asc" } },
       phases: {
         include: {
           matches: {
-            include: {
-              homeTeam: true,
-              awayTeam: true,
-            },
+            include: { homeTeam: true, awayTeam: true },
             orderBy: [{ kickoffAt: "asc" }, { matchNumber: "asc" }],
           },
         },
         orderBy: { sortOrder: "asc" },
       },
       matches: {
-        include: {
-          phase: true,
-          homeTeam: true,
-          awayTeam: true,
-        },
+        include: { phase: true, homeTeam: true, awayTeam: true },
         orderBy: [{ kickoffAt: "asc" }, { matchNumber: "asc" }],
       },
     },
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ startsAt: "desc" }, { name: "asc" }],
   });
+  const selected = competitions.find((competition) => competition.id === query.competition) ?? competitions[0] ?? null;
+  const view = query.view === "standings" ? "standings" : "fixture";
 
-  const selected =
-    competitions.find((competition) => competition.id === query.competition) ?? competitions[0] ?? null;
-  const orphanMatches =
-    selected?.matches.filter((match) => !match.phaseId) ?? [];
+  if (!selected) {
+    return (
+      <div className="page">
+        <header className="page-header"><div><span className="eyebrow">Competiciones</span><h1>Calendario</h1></div></header>
+        <section className="panel empty-state-panel">
+          <CalendarDays size={24} /><h2>No hay competiciones activas</h2>
+          <p className="muted">Los torneos publicados por el administrador apareceran aqui.</p>
+        </section>
+      </div>
+    );
+  }
 
   return (
-    <div className="page">
-      <header className="page-header">
-        <div>
-          <span className="eyebrow">Calendario</span>
-          <h1>Competiciones</h1>
+    <div className="page competition-page">
+      <header className="competition-hero">
+        <div className="competition-identity">
+          {selected.logoUrl ? <img src={selected.logoUrl} alt="" /> : <span className="competition-logo-placeholder"><CalendarDays size={24} /></span>}
+          <div>
+            <span className="eyebrow">{tournamentTypeLabels[selected.type]}</span>
+            <h1>{selected.name}</h1>
+            <p>{selected.season ?? "Temporada actual"} · {statusLabels[selected.status]}</p>
+          </div>
         </div>
+        <CalendarSyncButtons competitionId={selected.id} competitionName={selected.name} />
       </header>
 
-      {competitions.length === 0 ? (
-        <section className="panel empty-state-panel">
-          <CalendarDays size={24} />
-          <h2>No hay competiciones registradas</h2>
-          <p className="muted">Cuando el admin registre torneos, fases y partidos apareceran aqui.</p>
-        </section>
-      ) : (
-        <div className="calendar-layout">
-          <aside className="competition-sidebar panel">
-            <div className="panel-head">
-              <h2>Torneos</h2>
-              <span>{competitions.length}</span>
-            </div>
-            <div className="competition-picker-list">
-              {competitions.map((competition) => (
-                <Link
-                  className={
-                    selected?.id === competition.id
-                      ? "competition-picker-item active"
-                      : "competition-picker-item"
-                  }
-                  href={`/calendar?competition=${competition.id}`}
-                  key={competition.id}
-                >
-                  <strong>{competition.name}</strong>
-                  <span>
-                    {tournamentTypeLabels[competition.type]} · {statusLabels[competition.status]}
-                  </span>
-                  <small>
-                    {competition.matches.length} partidos · {competition.phases.length} fases
-                  </small>
-                </Link>
-              ))}
-            </div>
-          </aside>
+      <nav className="competition-switcher" aria-label="Seleccionar competicion">
+        {competitions.map((competition) => (
+          <Link
+            className={competition.id === selected.id ? "active" : ""}
+            href={`/calendar?competition=${competition.id}&view=${view}`}
+            key={competition.id}
+          >
+            {competition.logoUrl ? <img src={competition.logoUrl} alt="" /> : null}
+            <span>{competition.name}</span>
+            <small>{competition.season ?? "Actual"}</small>
+          </Link>
+        ))}
+      </nav>
 
-          <section className="panel calendar-panel">
-            {selected ? (
-              <>
-                <div className="panel-head calendar-head">
-                  <div>
-                    <h2>{selected.name}</h2>
-                    <span>
-                      {tournamentTypeLabels[selected.type]} · {selected.season ?? "Sin temporada"}
-                    </span>
-                  </div>
-                  <strong>{statusLabels[selected.status]}</strong>
-                </div>
+      <nav className="competition-view-tabs">
+        <Link className={view === "fixture" ? "active" : ""} href={`/calendar?competition=${selected.id}&view=fixture`}>
+          <CalendarDays size={17} />Calendario
+        </Link>
+        <Link className={view === "standings" ? "active" : ""} href={`/calendar?competition=${selected.id}&view=standings`}>
+          <BarChart3 size={17} />Posiciones
+        </Link>
+      </nav>
 
-                <div className="calendar-sync-banner" style={{ margin: "0 18px 18px", padding: "16px", borderRadius: "8px", border: "1px dashed var(--line)", background: "var(--panel-soft)", display: "flex", flexDirection: "column", gap: "12px" }}>
-                  <div style={{ display: "grid", gap: "4px" }}>
-                    <h3 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 800 }}>Sincronizar Calendario</h3>
-                    <p style={{ margin: 0, fontSize: "0.82rem", color: "var(--muted)", lineHeight: 1.4 }}>
-                      Agrega los partidos a tu calendario personal. Los marcadores oficiales se actualizarán automáticamente en vivo a través de nuestra API.
-                    </p>
-                  </div>
-                  <CalendarSyncButtons competitionId={selected.id} competitionName={selected.name} />
-                </div>
-
-                <div className="calendar-phase-list">
-                  {selected.phases.map((phase) => (
-                    <section className="calendar-phase" key={phase.id}>
-                      <header>
-                        <div>
-                          <h3>{phase.name}</h3>
-                          <span>
-                            {phase.groupCode ? `Grupo ${phase.groupCode} · ` : ""}
-                            {phase.matches.length} partidos
-                          </span>
-                        </div>
-                      </header>
-                      <MatchRows matches={phase.matches} />
-                    </section>
-                  ))}
-
-                  {orphanMatches.length > 0 ? (
-                    <section className="calendar-phase">
-                      <header>
-                        <div>
-                          <h3>Sin fase</h3>
-                          <span>{orphanMatches.length} partidos</span>
-                        </div>
-                      </header>
-                      <MatchRows matches={orphanMatches} />
-                    </section>
-                  ) : null}
-                </div>
-              </>
-            ) : null}
-          </section>
-        </div>
-      )}
+      {view === "fixture" ? <FixtureView matches={selected.matches} /> : <StandingsView competition={selected} />}
     </div>
   );
 }
 
-function MatchRows({
-  matches,
-}: {
-  matches: Array<{
-    id: string;
-    matchNumber: number | null;
-    kickoffAt: Date | null;
-    venue: string | null;
-    homePlaceholder: string | null;
-    awayPlaceholder: string | null;
-    status: string;
-    homeTeam: { name: string } | null;
-    awayTeam: { name: string } | null;
-  }>;
-}) {
-  if (matches.length === 0) {
-    return <p className="muted empty-inline">Sin partidos registrados.</p>;
+type CalendarMatch = {
+  id: string;
+  kickoffAt: Date | null;
+  venue: string | null;
+  status: "SCHEDULED" | "LIVE" | "FINISHED";
+  homeScore: number | null;
+  awayScore: number | null;
+  homePlaceholder: string | null;
+  awayPlaceholder: string | null;
+  homeTeam: { id: string; name: string; logoUrl: string | null } | null;
+  awayTeam: { id: string; name: string; logoUrl: string | null } | null;
+  phase: { name: string } | null;
+};
+
+function FixtureView({ matches }: { matches: CalendarMatch[] }) {
+  const dated = new Map<string, CalendarMatch[]>();
+  const unscheduled: CalendarMatch[] = [];
+  for (const match of matches) {
+    if (!match.kickoffAt) { unscheduled.push(match); continue; }
+    const key = formatAppDateKey(match.kickoffAt);
+    (dated.get(key) ?? dated.set(key, []).get(key)!).push(match);
   }
+  if (matches.length === 0) return <section className="panel empty-state-panel"><h2>Sin partidos registrados</h2></section>;
 
   return (
-    <div className="calendar-match-list">
-      {matches.map((match) => (
-        <article className="calendar-match-row" key={match.id}>
+    <div className="fixture-day-list">
+      {[...dated.entries()].map(([date, dayMatches]) => (
+        <section className="fixture-day panel" key={date}>
+          <header><h2>{formatAppDate(dayMatches[0].kickoffAt!)}</h2><span>{dayMatches.length} partidos</span></header>
           <div>
-            <strong>
-              {match.homeTeam?.name ?? match.homePlaceholder ?? "Local"} vs{" "}
-              {match.awayTeam?.name ?? match.awayPlaceholder ?? "Visitante"}
-            </strong>
-            <span>{match.venue ?? "Sede por definir"}</span>
+            {dayMatches.map((match) => <FixtureMatchRow match={match} key={match.id} />)}
           </div>
-          <div>
-            <small>{match.matchNumber ? `P${match.matchNumber}` : "Sin numero"}</small>
-            <time>{match.kickoffAt ? formatAppDateTime(match.kickoffAt) : "Fecha por definir"}</time>
-          </div>
-        </article>
+        </section>
       ))}
+      {unscheduled.length ? (
+        <section className="fixture-day panel"><header><h2>Fecha por definir</h2></header><div>{unscheduled.map((match) => <FixtureMatchRow match={match} key={match.id} />)}</div></section>
+      ) : null}
     </div>
   );
+}
+
+function FixtureMatchRow({ match }: { match: CalendarMatch }) {
+  const home = match.homeTeam?.name ?? match.homePlaceholder ?? "Local";
+  const away = match.awayTeam?.name ?? match.awayPlaceholder ?? "Visitante";
+  return (
+    <article className={`fixture-match ${match.status.toLowerCase()}`}>
+      <div className="fixture-team home"><TeamLabel name={home} logoUrl={match.homeTeam?.logoUrl} /></div>
+      <div className="fixture-kickoff">
+        {match.status === "FINISHED" ? <strong>{match.homeScore} : {match.awayScore}</strong> : <strong>{match.kickoffAt ? formatAppTime(match.kickoffAt) : "Por definir"}</strong>}
+        <span>{match.status === "LIVE" ? "En vivo" : match.phase?.name ?? "Sin fase"}</span>
+      </div>
+      <div className="fixture-team away"><TeamLabel name={away} logoUrl={match.awayTeam?.logoUrl} /></div>
+      {match.venue ? <small><MapPin size={12} />{match.venue}</small> : <small><Clock3 size={12} />Hora Guatemala</small>}
+    </article>
+  );
+}
+
+type StandingsCompetition = {
+  teams: Array<{ id: string; name: string; logoUrl: string | null; groupCode: string | null }>;
+  phases: Array<{
+    id: string;
+    name: string;
+    format: "GROUP" | "KNOCKOUT" | "LEAGUE";
+    groupCode: string | null;
+    automaticQualifiers: number;
+    bestThirdQualifiers: number;
+    matches: Array<{
+      id: string; kickoffAt: Date | null; status: "SCHEDULED" | "LIVE" | "FINISHED";
+      homeScore: number | null; awayScore: number | null;
+      homeTeam: { id: string; name: string; logoUrl: string | null } | null;
+      awayTeam: { id: string; name: string; logoUrl: string | null } | null;
+    }>;
+  }>;
+};
+
+function StandingsView({ competition }: { competition: StandingsCompetition }) {
+  const phases = competition.phases.filter((phase) => phase.format !== "KNOCKOUT");
+  const tables = phases.map((phase) => {
+    const usedIds = new Set(phase.matches.flatMap((match) => [match.homeTeam?.id, match.awayTeam?.id].filter(Boolean)));
+    const phaseTeams = usedIds.size
+      ? competition.teams.filter((team) => usedIds.has(team.id))
+      : competition.teams.filter((team) => !phase.groupCode || team.groupCode === phase.groupCode);
+    return { phase, rows: calculateStandings(phaseTeams, phase.matches, phase.automaticQualifiers) };
+  });
+  const groupTables = tables.filter((table) => table.phase.format === "GROUP");
+  const bestThirdCount = Math.max(0, ...groupTables.map((table) => table.phase.bestThirdQualifiers));
+  const bestThirds = bestThirdCount ? calculateBestThirds(groupTables.map((table) => table.rows), bestThirdCount) : [];
+
+  if (tables.length === 0) return <section className="panel empty-state-panel"><h2>Esta competicion no usa tabla de posiciones</h2></section>;
+  return (
+    <div className="standings-section-list">
+      {tables.map(({ phase, rows }) => <StandingsTable title={phase.name} rows={rows} key={phase.id} />)}
+      {bestThirds.length ? <StandingsTable title="Mejores terceros" rows={bestThirds} bestThirds /> : null}
+    </div>
+  );
+}
+
+function StandingsTable({ title, rows, bestThirds = false }: { title: string; rows: StandingRow[]; bestThirds?: boolean }) {
+  return (
+    <section className="standings-panel panel">
+      <header><h2>{title}</h2><span>{rows.length} equipos</span></header>
+      <div className="standings-scroll"><table><thead><tr><th>#</th><th>Equipo</th><th>PJ</th><th>GF:GC</th><th>DG</th><th>PTS</th><th>G</th><th>E</th><th>P</th><th>Forma</th></tr></thead>
+        <tbody>{rows.map((row) => (
+          <tr key={row.team.id} className={row.qualification ? "qualified" : ""}>
+            <td>{row.position}</td><td><TeamLabel name={row.team.name} logoUrl={row.team.logoUrl} compact />{row.qualification ? <small>{bestThirds ? "Mejor tercero clasificado" : "Clasificado"}</small> : null}</td>
+            <td>{row.played}</td><td>{row.goalsFor}:{row.goalsAgainst}</td><td>{row.goalDifference > 0 ? `+${row.goalDifference}` : row.goalDifference}</td><td><strong>{row.points}</strong></td><td>{row.won}</td><td>{row.drawn}</td><td>{row.lost}</td><td><FormDots values={row.form} /></td>
+          </tr>
+        ))}</tbody>
+      </table></div>
+    </section>
+  );
+}
+
+function FormDots({ values }: { values: FormResult[] }) {
+  return <span className="recent-form-dots">{values.length ? values.map((value, index) => <span className={`form-dot ${value.toLowerCase()}`} key={`${value}-${index}`}>{value}</span>) : <span className="muted">—</span>}</span>;
 }

@@ -9,10 +9,11 @@ import {
   deleteCompetitionPhaseAction,
   deleteCompetitionTeamAction,
   deleteCompetitionMatchAction,
+  updateCompetitionPhaseRulesAction,
   saveCompetitionMatchResultAction,
 } from "@/app/actions";
 import { RoomMarketFields } from "@/components/RoomMarketFields";
-import { type RoomMarketKey, roomMarketCatalog } from "@/lib/room-presets";
+import { roomMarketCatalog } from "@/lib/room-presets";
 import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { stageLabels } from "@/lib/stages";
@@ -97,8 +98,6 @@ export default async function CompetitionDetailPage({
   const sortedGroups = Array.from(groupOptions).sort();
 
   // Find default phase for matches
-  const leaguePhase = competition.phases.find((p) => p.format === "LEAGUE");
-  const defaultPhaseId = leaguePhase?.id ?? (competition.phases.length === 1 ? competition.phases[0].id : "");
 
   // Calculate next match number for matches
   const maxMatchNumber = competition.matches.reduce(
@@ -110,16 +109,17 @@ export default async function CompetitionDetailPage({
   // Fetch existing market results for all matches of this competition to avoid nested async mappings
   const matchIds = competition.matches.map((m) => m.id);
   const allMarketResults = await prisma.matchMarketResult.findMany({
-    where: { matchId: { in: matchIds } }
+    where: { competitionMatchId: { in: matchIds } }
   });
   
   // Group results by matchId
-  const marketResultsByMatch: Record<string, Record<string, any>> = {};
+  const marketResultsByMatch: Record<string, Record<string, Record<string, unknown>>> = {};
   allMarketResults.forEach((r) => {
-    if (!marketResultsByMatch[r.matchId]) {
-      marketResultsByMatch[r.matchId] = {};
+    if (!r.competitionMatchId) return;
+    if (!marketResultsByMatch[r.competitionMatchId]) {
+      marketResultsByMatch[r.competitionMatchId] = {};
     }
-    marketResultsByMatch[r.matchId][r.marketKey] = r.value as Record<string, unknown>;
+    marketResultsByMatch[r.competitionMatchId][r.marketKey] = r.value as Record<string, unknown>;
   });
 
   return (
@@ -181,6 +181,30 @@ export default async function CompetitionDetailPage({
               <label>
                 Temporada
                 <input name="season" defaultValue={competition.season ?? ""} placeholder="Ej. 2026/27" />
+              </label>
+              <div className="scoring-rules-grid">
+                <label>
+                  Pais o region
+                  <input name="countryCode" defaultValue={competition.countryCode ?? ""} placeholder="Ej. GT, UEFA" />
+                </label>
+                <label>
+                  URL del logo
+                  <input name="logoUrl" type="url" defaultValue={competition.logoUrl ?? ""} placeholder="https://..." />
+                </label>
+              </div>
+              <label>
+                URL de portada
+                <input name="bannerUrl" type="url" defaultValue={competition.bannerUrl ?? ""} placeholder="https://..." />
+              </label>
+              <label>
+                Campeon oficial
+                <select name="championTeamId" defaultValue={competition.championTeamId ?? ""}>
+                  <option value="">Aun no definido</option>
+                  {competition.teams.map((team) => (
+                    <option key={team.id} value={team.id}>{team.name}</option>
+                  ))}
+                </select>
+                <small>Al definirlo se recalculan los puntos de campeon en todas las salas.</small>
               </label>
               <label>
                 Estado
@@ -309,6 +333,16 @@ export default async function CompetitionDetailPage({
                     <input name="groupCode" placeholder="A, B, Norte..." />
                   </label>
                 </div>
+                <div className="scoring-rules-grid">
+                  <label>
+                    Clasificados directos
+                    <input type="number" name="automaticQualifiers" min="0" max="64" defaultValue="0" />
+                  </label>
+                  <label>
+                    Mejores terceros clasificados
+                    <input type="number" name="bestThirdQualifiers" min="0" max="64" defaultValue="0" />
+                  </label>
+                </div>
                 <SubmitButton className="primary-button">
                   Crear fase
                 </SubmitButton>
@@ -330,6 +364,8 @@ export default async function CompetitionDetailPage({
                       {formatLabels[phase.format]} · Orden {phase.sortOrder}
                       {phase.groupCode ? ` · Grupo ${phase.groupCode}` : ""}
                       {phase.stage ? ` · ${stageLabels[phase.stage]}` : ""}
+                      {phase.automaticQualifiers ? ` · ${phase.automaticQualifiers} directos` : ""}
+                      {phase.bestThirdQualifiers ? ` · ${phase.bestThirdQualifiers} mejores terceros` : ""}
                     </span>
                   </div>
                   <div className="admin-item-actions">
@@ -348,6 +384,21 @@ export default async function CompetitionDetailPage({
                       </button>
                     </form>
                   </div>
+                  {phase.format !== "KNOCKOUT" ? (
+                    <form action={updateCompetitionPhaseRulesAction} className="phase-rule-editor">
+                      <input type="hidden" name="id" value={phase.id} />
+                      <input type="hidden" name="competitionId" value={competition.id} />
+                      <label>
+                        Directos
+                        <input type="number" name="automaticQualifiers" min="0" max="64" defaultValue={phase.automaticQualifiers} />
+                      </label>
+                      <label>
+                        Mejores terceros
+                        <input type="number" name="bestThirdQualifiers" min="0" max="64" defaultValue={phase.bestThirdQualifiers} />
+                      </label>
+                      <button className="ghost-button" type="submit">Guardar clasificacion</button>
+                    </form>
+                  ) : null}
                 </div>
               ))
             )}
@@ -739,7 +790,8 @@ export default async function CompetitionDetailPage({
                                           id: match.id,
                                           home: homeName,
                                           away: awayName,
-                                        } as any}
+                                          stage: match.phase?.stage ?? "GROUP",
+                                        }}
                                         markets={manualMarkets}
                                         answers={marketResultsMap}
                                       />

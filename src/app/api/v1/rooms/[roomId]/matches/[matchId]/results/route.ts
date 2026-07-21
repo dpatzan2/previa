@@ -9,10 +9,13 @@ export async function GET(
 ) {
   const user = await requireUser();
   const { roomId, matchId } = await params;
-  await requireRoomMembership(roomId, user.id);
+  const { room } = await requireRoomMembership(roomId, user.id);
+  if (!room.externalTournamentId) {
+    return NextResponse.json({ error: "ROOM_WITHOUT_COMPETITION" }, { status: 409 });
+  }
 
-  const match = await prisma.match.findUnique({
-    where: { id: matchId },
+  const match = await prisma.competitionMatch.findFirst({
+    where: { id: matchId, competitionId: room.externalTournamentId },
     select: { id: true, status: true, homeScore: true, awayScore: true, updatedAt: true },
   });
   if (!match) return NextResponse.json({ error: "MATCH_NOT_FOUND" }, { status: 404 });
@@ -26,12 +29,12 @@ export async function GET(
       select: { userId: true, user: { select: { displayName: true } } },
     }),
     prisma.prediction.findMany({
-      where: { roomId, matchId },
+      where: { roomId, competitionMatchId: matchId },
       select: { userId: true, points: true },
     }),
     prisma.predictionAnswer.groupBy({
       by: ["userId"],
-      where: { roomId, matchId },
+      where: { roomId, competitionMatchId: matchId },
       _sum: { points: true },
     }),
   ]);

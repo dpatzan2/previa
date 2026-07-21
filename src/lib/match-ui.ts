@@ -1,4 +1,5 @@
 import type { MatchStage } from "@prisma/client";
+import type { FormResult } from "@/lib/competition-insights";
 
 import { matchScheduleLabels } from "@/lib/timezone";
 
@@ -16,6 +17,10 @@ export type DisplayMatch = {
   pickDeadlineLabel?: string | null;
   home: string;
   away: string;
+  homeLogoUrl?: string | null;
+  awayLogoUrl?: string | null;
+  homeForm?: FormResult[];
+  awayForm?: FormResult[];
   homeTeamId: string | null;
   awayTeamId: string | null;
   homeScore: number | null;
@@ -45,6 +50,16 @@ export type PeerPrediction = {
   predictedWinnerSide: "HOME" | "AWAY" | null;
   pickedTeamName: string | null;
   points: number;
+};
+
+export type PopularPrediction = {
+  visible: boolean;
+  total: number;
+  homePercent: number;
+  drawPercent: number;
+  awayPercent: number;
+  advanceHomePercent?: number;
+  advanceAwayPercent?: number;
 };
 
 export type TeamOption = {

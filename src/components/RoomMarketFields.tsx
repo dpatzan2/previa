@@ -1,7 +1,14 @@
 "use client";
 
 import type { DisplayMatch } from "@/lib/match-ui";
-import { roomMarketCatalog, type RoomMarketKey } from "@/lib/room-presets";
+import {
+  bonusMarketsForStage,
+  roomMarketCatalog,
+  type RoomMarketKey,
+  type RoomMarketDefinition,
+} from "@/lib/room-presets";
+
+type MarketMatch = Pick<DisplayMatch, "id" | "home" | "away" | "stage">;
 
 type MarketAnswerValue = Record<string, unknown>;
 
@@ -10,7 +17,7 @@ function stringValue(value: MarketAnswerValue | undefined, key: string) {
   return typeof raw === "string" || typeof raw === "number" ? String(raw) : "";
 }
 
-function optionName(match: DisplayMatch, side: "HOME" | "AWAY") {
+function optionName(match: MarketMatch, side: "HOME" | "AWAY") {
   return side === "HOME" ? match.home : match.away;
 }
 
@@ -55,23 +62,47 @@ export function RoomMarketFields({
   markets,
   answers,
 }: {
-  match: DisplayMatch;
+  match: MarketMatch;
   markets: RoomMarketKey[];
   answers: Partial<Record<RoomMarketKey, MarketAnswerValue>>;
 }) {
-  if (markets.length === 0) return null;
+  const availableMarkets = bonusMarketsForStage(markets, match.stage);
+  if (availableMarkets.length === 0) return null;
+  const definitions = availableMarkets
+    .map((market) => roomMarketCatalog.find((item) => item.key === market))
+    .filter((item): item is RoomMarketDefinition => Boolean(item));
+  const groups = ["goals", "discipline", "knockout", "advanced"] as const;
+  const groupLabels = {
+    goals: "Goles y resultado",
+    discipline: "Disciplina",
+    knockout: "Definicion de eliminatoria",
+    advanced: "Estadisticas especiales",
+  };
 
   return (
     <div className="room-market-fields">
-      {markets.map((market) => {
-        const definition = roomMarketCatalog.find((item) => item.key === market);
-        if (!definition) return null;
-
+      {groups.map((group) => {
+        const items = definitions.filter((definition) => definition.group === group);
+        if (items.length === 0) return null;
         return (
-          <fieldset className="room-market-pick" key={market}>
-            <legend>{definition.label}</legend>
-            <MarketInput market={market} match={match} value={answers[market]} />
-          </fieldset>
+          <section className="room-market-group" key={group}>
+            <h4>{groupLabels[group]}</h4>
+            <div className="room-market-grid">
+              {items.map((definition) => (
+                <div className="room-market-pick" key={definition.key}>
+                  <div className="room-market-pick-head">
+                    <strong>{definition.label}</strong>
+                    <small>{definition.description}</small>
+                  </div>
+                  <MarketInput
+                    market={definition.key}
+                    match={match}
+                    value={answers[definition.key]}
+                  />
+                </div>
+              ))}
+            </div>
+          </section>
         );
       })}
     </div>
@@ -84,7 +115,7 @@ function MarketInput({
   value,
 }: {
   market: RoomMarketKey;
-  match: DisplayMatch;
+  match: MarketMatch;
   value?: MarketAnswerValue;
 }) {
   if (market === "HALFTIME_SCORE") {
@@ -120,11 +151,11 @@ function MarketInput({
     market === "GOAL_IN_BOTH_HALVES"
   ) {
     return (
-      <select name={marketFieldName(market, match.id, "value")} defaultValue={stringValue(value, "value")}>
-        <option value="">Sin pick</option>
-        <option value="YES">Si</option>
-        <option value="NO">No</option>
-      </select>
+      <ChoiceGroup
+        name={marketFieldName(market, match.id, "value")}
+        value={stringValue(value, "value")}
+        options={[["", "Sin pick"], ["YES", "Si"], ["NO", "No"]]}
+      />
     );
   }
 
@@ -133,54 +164,51 @@ function MarketInput({
     market === "SECOND_HALF_RESULT"
   ) {
     return (
-      <select name={marketFieldName(market, match.id, "value")} defaultValue={stringValue(value, "value")}>
-        <option value="">Sin pick</option>
-        <option value="HOME">{optionName(match, "HOME")}</option>
-        <option value="DRAW">Empate</option>
-        <option value="AWAY">{optionName(match, "AWAY")}</option>
-      </select>
+      <ChoiceGroup
+        name={marketFieldName(market, match.id, "value")}
+        value={stringValue(value, "value")}
+        options={[["", "Sin pick"], ["HOME", optionName(match, "HOME")], ["DRAW", "Empate"], ["AWAY", optionName(match, "AWAY")]]}
+      />
     );
   }
 
   if (market === "DOUBLE_CHANCE") {
     return (
-      <select name={marketFieldName(market, match.id, "value")} defaultValue={stringValue(value, "value")}>
-        <option value="">Sin pick</option>
-        <option value="HOME_DRAW">{optionName(match, "HOME")} o empate</option>
-        <option value="HOME_AWAY">{optionName(match, "HOME")} o {optionName(match, "AWAY")}</option>
-        <option value="DRAW_AWAY">Empate o {optionName(match, "AWAY")}</option>
-      </select>
+      <ChoiceGroup
+        name={marketFieldName(market, match.id, "value")}
+        value={stringValue(value, "value")}
+        options={[["", "Sin pick"], ["HOME_DRAW", `${optionName(match, "HOME")} o empate`], ["HOME_AWAY", `${optionName(match, "HOME")} o ${optionName(match, "AWAY")}`], ["DRAW_AWAY", `Empate o ${optionName(match, "AWAY")}`]]}
+      />
     );
   }
 
   if (market === "OVER_UNDER_2_5") {
     return (
-      <select name={marketFieldName(market, match.id, "value")} defaultValue={stringValue(value, "value")}>
-        <option value="">Sin pick</option>
-        <option value="OVER_2_5">Mas de 2.5</option>
-        <option value="UNDER_2_5">Menos de 2.5</option>
-      </select>
+      <ChoiceGroup
+        name={marketFieldName(market, match.id, "value")}
+        value={stringValue(value, "value")}
+        options={[["", "Sin pick"], ["OVER_2_5", "Mas de 2.5"], ["UNDER_2_5", "Menos de 2.5"]]}
+      />
     );
   }
 
   if (market === "ODD_EVEN_TOTAL_GOALS") {
     return (
-      <select name={marketFieldName(market, match.id, "value")} defaultValue={stringValue(value, "value")}>
-        <option value="">Sin pick</option>
-        <option value="EVEN">Par</option>
-        <option value="ODD">Impar</option>
-      </select>
+      <ChoiceGroup
+        name={marketFieldName(market, match.id, "value")}
+        value={stringValue(value, "value")}
+        options={[["", "Sin pick"], ["EVEN", "Par"], ["ODD", "Impar"]]}
+      />
     );
   }
 
   if (market === "HIGHEST_SCORING_HALF") {
     return (
-      <select name={marketFieldName(market, match.id, "value")} defaultValue={stringValue(value, "value")}>
-        <option value="">Sin pick</option>
-        <option value="FIRST_HALF">Primer tiempo</option>
-        <option value="SECOND_HALF">Segundo tiempo</option>
-        <option value="EQUAL">Igual cantidad</option>
-      </select>
+      <ChoiceGroup
+        name={marketFieldName(market, match.id, "value")}
+        value={stringValue(value, "value")}
+        options={[["", "Sin pick"], ["FIRST_HALF", "Primer tiempo"], ["SECOND_HALF", "Segundo tiempo"], ["EQUAL", "Igual cantidad"]]}
+      />
     );
   }
 
@@ -195,12 +223,11 @@ function MarketInput({
     market === "TEAM_MOST_CARDS"
   ) {
     return (
-      <select name={marketFieldName(market, match.id, "side")} defaultValue={stringValue(value, "side")}>
-        <option value="">Sin pick</option>
-        <option value="HOME">{optionName(match, "HOME")}</option>
-        <option value="AWAY">{optionName(match, "AWAY")}</option>
-        <option value="NONE">Ninguno</option>
-      </select>
+      <ChoiceGroup
+        name={marketFieldName(market, match.id, "side")}
+        value={stringValue(value, "side")}
+        options={[["", "Sin pick"], ["HOME", optionName(match, "HOME")], ["AWAY", optionName(match, "AWAY")], ["NONE", "Ninguno"]]}
+      />
     );
   }
 
@@ -240,7 +267,10 @@ function MarketInput({
   }
 
   if (market === "FIRST_GOAL_MINUTE_RANGE") {
-    return <RangeSelect market={market} matchId={match.id} value={value} options={firstGoalMinuteOptions} />;
+    const options = match.stage === "GROUP"
+      ? firstGoalMinuteOptions.filter(([optionValue]) => optionValue !== "EXTRA_TIME")
+      : firstGoalMinuteOptions;
+    return <RangeSelect market={market} matchId={match.id} value={value} options={options} />;
   }
 
   if (market === "YELLOW_CARD_RANGE") {
@@ -276,13 +306,36 @@ function RangeSelect({
   options: string[][];
 }) {
   return (
-    <select name={marketFieldName(market, matchId, "value")} defaultValue={stringValue(value, "value")}>
-      <option value="">Sin pick</option>
+    <ChoiceGroup
+      name={marketFieldName(market, matchId, "value")}
+      value={stringValue(value, "value")}
+      options={[["", "Sin pick"], ...options]}
+    />
+  );
+}
+
+function ChoiceGroup({
+  name,
+  value,
+  options,
+}: {
+  name: string;
+  value: string;
+  options: string[][];
+}) {
+  return (
+    <div className="market-choice-grid">
       {options.map(([optionValue, label]) => (
-        <option value={optionValue} key={optionValue}>
-          {label}
-        </option>
+        <label className="market-choice" key={optionValue || "empty"}>
+          <input
+            type="radio"
+            name={name}
+            value={optionValue}
+            defaultChecked={value === optionValue}
+          />
+          <span>{label}</span>
+        </label>
       ))}
-    </select>
+    </div>
   );
 }

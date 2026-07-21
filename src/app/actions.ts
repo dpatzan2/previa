@@ -7,13 +7,13 @@ import {
   type CompetitionStatus,
   type RoomConfigPreset,
   type RoomDeadlineMode,
+  type PopularPredictionsVisibility,
   type RoomMemberRole,
   type TournamentType,
   MatchStatus,
   Prisma,
 } from "@prisma/client";
 import bcrypt from "bcryptjs";
-import crypto from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect, unstable_rethrow } from "next/navigation";
 import { z } from "zod";
@@ -22,7 +22,7 @@ import path from "path";
 import { signIn, signOut, requireAdmin, requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { canParticipateInPool } from "@/lib/participants";
-import { computePhaseDeadlines, isMatchLockedForPicks, roomDeadlineConfig } from "@/lib/phase-deadlines";
+import { championPickDeadlineAt, computePhaseDeadlines, isMatchLockedForPicks, roomDeadlineConfig } from "@/lib/phase-deadlines";
 import { SCORING_SETTINGS_ID } from "@/lib/scoring-settings";
 import { syncWc2026Matches } from "@/lib/wc2026";
 import type { ActionFeedbackState } from "@/lib/form-action-state";
@@ -30,6 +30,7 @@ import { safeRedirectPath } from "@/lib/session-cookie";
 import { recalculateScoresInScope, refreshRoomLeaderboards } from "@/lib/score-recalculation";
 import {
   bonusMarketsFor,
+  bonusMarketsForStage,
   marketsForPreset,
   parseEnabledMarkets,
   roomMarketCatalog,
@@ -182,6 +183,9 @@ export async function createCompetitionAction(formData: FormData) {
     name: z.string().trim().min(2).max(120),
     status: z.enum(["DRAFT", "ACTIVE", "ARCHIVED"]),
     season: z.string().trim().max(40).optional(),
+    countryCode: z.string().trim().max(8).optional(),
+    logoUrl: z.string().trim().max(500).optional(),
+    bannerUrl: z.string().trim().max(500).optional(),
     startsAt: z.string().trim().optional(),
     endsAt: z.string().trim().optional(),
   });
@@ -190,6 +194,9 @@ export async function createCompetitionAction(formData: FormData) {
     name: String(formData.get("name") ?? ""),
     status: String(formData.get("status") ?? "DRAFT"),
     season: String(formData.get("season") ?? ""),
+    countryCode: String(formData.get("countryCode") ?? ""),
+    logoUrl: String(formData.get("logoUrl") ?? ""),
+    bannerUrl: String(formData.get("bannerUrl") ?? ""),
     startsAt: String(formData.get("startsAt") ?? ""),
     endsAt: String(formData.get("endsAt") ?? ""),
   });
@@ -203,6 +210,9 @@ export async function createCompetitionAction(formData: FormData) {
       type: "CUSTOM",
       status: parsed.data.status as CompetitionStatus,
       season: parsed.data.season || null,
+      countryCode: parsed.data.countryCode || null,
+      logoUrl: parsed.data.logoUrl || null,
+      bannerUrl: parsed.data.bannerUrl || null,
       startsAt: parseAppDateTime(parsed.data.startsAt),
       endsAt: parseAppDateTime(parsed.data.endsAt),
     },
@@ -225,6 +235,8 @@ export async function createCompetitionPhaseAction(formData: FormData) {
     format: z.enum(["GROUP", "KNOCKOUT", "LEAGUE"]),
     sortOrder: z.coerce.number().int().min(0).max(999),
     groupCode: z.string().trim().max(12).optional(),
+    automaticQualifiers: z.coerce.number().int().min(0).max(64),
+    bestThirdQualifiers: z.coerce.number().int().min(0).max(64),
     startsAt: z.string().trim().optional(),
     endsAt: z.string().trim().optional(),
   });
@@ -237,6 +249,8 @@ export async function createCompetitionPhaseAction(formData: FormData) {
     format: String(formData.get("format") ?? "GROUP"),
     sortOrder: formData.get("sortOrder") ?? "0",
     groupCode: String(formData.get("groupCode") ?? ""),
+    automaticQualifiers: formData.get("automaticQualifiers") ?? "0",
+    bestThirdQualifiers: formData.get("bestThirdQualifiers") ?? "0",
     startsAt: String(formData.get("startsAt") ?? ""),
     endsAt: String(formData.get("endsAt") ?? ""),
   });
@@ -251,6 +265,8 @@ export async function createCompetitionPhaseAction(formData: FormData) {
       format: parsed.data.format as CompetitionPhaseFormat,
       sortOrder: parsed.data.sortOrder,
       groupCode: parsed.data.groupCode || null,
+      automaticQualifiers: parsed.data.automaticQualifiers,
+      bestThirdQualifiers: parsed.data.bestThirdQualifiers,
       startsAt: parseAppDateTime(parsed.data.startsAt),
       endsAt: parseAppDateTime(parsed.data.endsAt),
     },
@@ -636,6 +652,10 @@ export async function updateCompetitionAction(formData: FormData) {
     name: z.string().trim().min(2).max(120),
     status: z.enum(["DRAFT", "ACTIVE", "ARCHIVED"]),
     season: z.string().trim().max(40).optional(),
+    countryCode: z.string().trim().max(8).optional(),
+    logoUrl: z.string().trim().max(500).optional(),
+    bannerUrl: z.string().trim().max(500).optional(),
+    championTeamId: z.string().trim().optional(),
     startsAt: z.string().trim().optional(),
     endsAt: z.string().trim().optional(),
   });
@@ -645,6 +665,10 @@ export async function updateCompetitionAction(formData: FormData) {
     name: String(formData.get("name") ?? ""),
     status: String(formData.get("status") ?? "DRAFT"),
     season: String(formData.get("season") ?? ""),
+    countryCode: String(formData.get("countryCode") ?? ""),
+    logoUrl: String(formData.get("logoUrl") ?? ""),
+    bannerUrl: String(formData.get("bannerUrl") ?? ""),
+    championTeamId: String(formData.get("championTeamId") ?? ""),
     startsAt: String(formData.get("startsAt") ?? ""),
     endsAt: String(formData.get("endsAt") ?? ""),
   });
@@ -657,6 +681,10 @@ export async function updateCompetitionAction(formData: FormData) {
       name: parsed.data.name,
       status: parsed.data.status as CompetitionStatus,
       season: parsed.data.season || null,
+      countryCode: parsed.data.countryCode || null,
+      logoUrl: parsed.data.logoUrl || null,
+      bannerUrl: parsed.data.bannerUrl || null,
+      championTeamId: parsed.data.championTeamId || null,
       startsAt: parseAppDateTime(parsed.data.startsAt),
       endsAt: parseAppDateTime(parsed.data.endsAt),
     },
@@ -665,6 +693,7 @@ export async function updateCompetitionAction(formData: FormData) {
   revalidatePath("/admin");
   revalidatePath(`/admin/${parsed.data.id}`);
   revalidatePath("/calendar");
+  await recalculateScores();
   redirect(`/admin/${parsed.data.id}?saved=competition`);
 }
 
@@ -692,6 +721,34 @@ export async function deleteCompetitionPhaseAction(formData: FormData) {
   revalidatePath(`/admin/${competitionId}`);
   revalidatePath("/calendar");
   redirect(`/admin/${competitionId}?tab=phases&deleted=phase`);
+}
+
+export async function updateCompetitionPhaseRulesAction(formData: FormData) {
+  await requireAdmin();
+  const schema = z.object({
+    id: z.string().trim().min(1),
+    competitionId: z.string().trim().min(1),
+    automaticQualifiers: z.coerce.number().int().min(0).max(64),
+    bestThirdQualifiers: z.coerce.number().int().min(0).max(64),
+  });
+  const parsed = schema.safeParse({
+    id: String(formData.get("id") ?? ""),
+    competitionId: String(formData.get("competitionId") ?? ""),
+    automaticQualifiers: formData.get("automaticQualifiers") ?? "0",
+    bestThirdQualifiers: formData.get("bestThirdQualifiers") ?? "0",
+  });
+  if (!parsed.success) redirect("/admin?error=phase-rules");
+
+  await prisma.competitionPhase.update({
+    where: { id: parsed.data.id },
+    data: {
+      automaticQualifiers: parsed.data.automaticQualifiers,
+      bestThirdQualifiers: parsed.data.bestThirdQualifiers,
+    },
+  });
+  revalidatePath(`/admin/${parsed.data.competitionId}`);
+  revalidatePath("/calendar");
+  redirect(`/admin/${parsed.data.competitionId}?tab=phases&saved=rules`);
 }
 
 export async function deleteCompetitionTeamAction(formData: FormData) {
@@ -739,90 +796,35 @@ export async function saveCompetitionMatchResultAction(formData: FormData) {
   }
 
   await prisma.$transaction(async (tx) => {
-    // Update the canonical competition result and its scoring projection atomically.
-    const compMatch = await tx.competitionMatch.update({
+    const current = await tx.competitionMatch.findUnique({
+      where: { id: matchId },
+      select: { homeTeamId: true, awayTeamId: true },
+    });
+    if (!current) throw new Error("Competition match not found");
+
+    const actualWinnerSide: PickSide | null =
+      winnerSideRaw === "HOME" || winnerSideRaw === "AWAY"
+        ? winnerSideRaw as PickSide
+        : homeScore !== null && awayScore !== null && homeScore !== awayScore
+          ? homeScore > awayScore ? "HOME" : "AWAY"
+          : null;
+    const actualWinnerTeamId =
+      actualWinnerSide === "HOME"
+        ? current.homeTeamId
+        : actualWinnerSide === "AWAY"
+          ? current.awayTeamId
+          : null;
+
+    await tx.competitionMatch.update({
       where: { id: matchId },
       data: {
         homeScore,
         awayScore,
         status: status as MatchStatus,
+        actualWinnerSide,
+        actualWinnerTeamId,
       },
-      include: { phase: true, homeTeam: true, awayTeam: true },
     });
-
-    // Keep the legacy Match projection in sync for room predictions.
-    const legacyMatchExists = await tx.match.findUnique({ where: { id: matchId } });
-    
-    let homeTeamId = null;
-    let awayTeamId = null;
-    
-    if (compMatch.homeTeam) {
-      const t = await tx.team.upsert({
-        where: { normalizedName: compMatch.homeTeam.normalizedName },
-        update: {},
-        create: { name: compMatch.homeTeam.name, normalizedName: compMatch.homeTeam.normalizedName },
-      });
-      homeTeamId = t.id;
-    }
-    if (compMatch.awayTeam) {
-      const t = await tx.team.upsert({
-        where: { normalizedName: compMatch.awayTeam.normalizedName },
-        update: {},
-        create: { name: compMatch.awayTeam.name, normalizedName: compMatch.awayTeam.normalizedName },
-      });
-      awayTeamId = t.id;
-    }
-
-    let actualWinnerSide: PickSide | null = null;
-    let actualWinnerTeamId: string | null = null;
-
-    if (winnerSideRaw === "HOME" || winnerSideRaw === "AWAY") {
-      actualWinnerSide = winnerSideRaw as PickSide;
-      actualWinnerTeamId = winnerSideRaw === "HOME" ? homeTeamId : awayTeamId;
-    } else if (compMatch.phase?.stage === "GROUP" && homeScore !== null && awayScore !== null) {
-      actualWinnerSide = homeScore === awayScore ? null : homeScore > awayScore ? "HOME" : "AWAY";
-    }
-
-    if (!legacyMatchExists) {
-      const maxLegacyMatch = await tx.match.findFirst({
-        orderBy: { matchNumber: "desc" },
-        select: { matchNumber: true },
-      });
-      const legacyMatchNumber = (maxLegacyMatch?.matchNumber ?? 0) + 1;
-      
-      await tx.match.create({
-        data: {
-          id: matchId,
-          matchNumber: legacyMatchNumber,
-          stage: compMatch.phase?.stage ?? "GROUP",
-          groupCode: compMatch.phase?.groupCode || null,
-          kickoffAt: compMatch.kickoffAt,
-          venue: compMatch.venue,
-          homeTeamId,
-          awayTeamId,
-          homePlaceholder: compMatch.homePlaceholder,
-          awayPlaceholder: compMatch.awayPlaceholder,
-          homeScore,
-          awayScore,
-          actualWinnerSide,
-          actualWinnerTeamId,
-          status: status as MatchStatus,
-        }
-      });
-    } else {
-      await tx.match.update({
-        where: { id: matchId },
-        data: {
-          homeTeamId,
-          awayTeamId,
-          homeScore,
-          awayScore,
-          actualWinnerSide,
-          actualWinnerTeamId,
-          status: status as MatchStatus,
-        }
-      });
-    }
 
     // 3. Save MatchMarketResults for all manual markets
     const manualMarkets = roomMarketCatalog
@@ -834,6 +836,7 @@ export async function saveCompetitionMatchResultAction(formData: FormData) {
       matchId,
       markets: manualMarkets,
       formData,
+      competitionMatch: true,
     });
     await recalculateScoresInScope(tx, { matchId });
   }, { maxWait: 5_000, timeout: 20_000 });
@@ -863,6 +866,9 @@ export async function createRoomAction(formData: FormData) {
     configPreset: z.enum(["BASIC", "INTERMEDIATE", "COMPLETE", "CUSTOM"]),
     deadlineMode: z.enum(["PER_MATCH", "PHASE"]),
     deadlineHoursBefore: z.coerce.number().int().min(0).max(168),
+    popularPredictionsVisibility: z.enum(["ALWAYS", "AFTER_PICK", "AFTER_DEADLINE", "HIDDEN"]),
+    championPickEnabled: z.boolean(),
+    championPickPoints: z.coerce.number().int().min(0).max(99),
   });
 
   const parsed = schema.safeParse({
@@ -872,6 +878,9 @@ export async function createRoomAction(formData: FormData) {
     configPreset: String(formData.get("configPreset") ?? "BASIC"),
     deadlineMode: String(formData.get("deadlineMode") ?? "PER_MATCH"),
     deadlineHoursBefore: formData.get("deadlineHoursBefore") ?? "1",
+    popularPredictionsVisibility: String(formData.get("popularPredictionsVisibility") ?? "AFTER_PICK"),
+    championPickEnabled: formData.get("championPickEnabled") === "on",
+    championPickPoints: formData.get("championPickPoints") ?? "5",
   });
 
   if (!parsed.success) {
@@ -891,6 +900,10 @@ export async function createRoomAction(formData: FormData) {
       configPreset,
       deadlineMode: parsed.data.deadlineMode as RoomDeadlineMode,
       deadlineHoursBefore: parsed.data.deadlineHoursBefore,
+      popularPredictionsVisibility:
+        parsed.data.popularPredictionsVisibility as PopularPredictionsVisibility,
+      championPickEnabled: parsed.data.championPickEnabled,
+      championPickPoints: parsed.data.championPickPoints,
       accessCode,
       ownerId: user.id,
       members: {
@@ -962,6 +975,9 @@ export async function updateRoomSettingsAction(formData: FormData) {
     configPreset: z.enum(["BASIC", "INTERMEDIATE", "COMPLETE", "CUSTOM"]),
     deadlineMode: z.enum(["PER_MATCH", "PHASE"]),
     deadlineHoursBefore: z.coerce.number().int().min(0).max(168),
+    popularPredictionsVisibility: z.enum(["ALWAYS", "AFTER_PICK", "AFTER_DEADLINE", "HIDDEN"]),
+    championPickEnabled: z.boolean(),
+    championPickPoints: z.coerce.number().int().min(0).max(99),
     exactScorePoints: z.coerce.number().int().min(0).max(99),
     outcomePoints: z.coerce.number().int().min(0).max(99),
     advancePickPoints: z.coerce.number().int().min(0).max(99),
@@ -975,6 +991,9 @@ export async function updateRoomSettingsAction(formData: FormData) {
     configPreset: String(formData.get("configPreset") ?? ""),
     deadlineMode: String(formData.get("deadlineMode") ?? "PER_MATCH"),
     deadlineHoursBefore: formData.get("deadlineHoursBefore") ?? "1",
+    popularPredictionsVisibility: String(formData.get("popularPredictionsVisibility") ?? "AFTER_PICK"),
+    championPickEnabled: formData.get("championPickEnabled") === "on",
+    championPickPoints: formData.get("championPickPoints") ?? "5",
     exactScorePoints: formData.get("exactScorePoints"),
     outcomePoints: formData.get("outcomePoints"),
     advancePickPoints: formData.get("advancePickPoints"),
@@ -1040,6 +1059,10 @@ export async function updateRoomSettingsAction(formData: FormData) {
       configPreset,
       deadlineMode: parsed.data.deadlineMode as RoomDeadlineMode,
       deadlineHoursBefore: parsed.data.deadlineHoursBefore,
+      popularPredictionsVisibility:
+        parsed.data.popularPredictionsVisibility as PopularPredictionsVisibility,
+      championPickEnabled: parsed.data.championPickEnabled,
+      championPickPoints: parsed.data.championPickPoints,
       ruleSet: {
         upsert: {
           update: {
@@ -1265,7 +1288,16 @@ export async function saveRoomPredictionsAction(
 
     const room = await prisma.room.findUnique({
       where: { id: roomId },
-      include: { members: true, ruleSet: true },
+      include: {
+        members: true,
+        ruleSet: true,
+        competition: {
+          include: {
+            teams: true,
+            matches: { include: { phase: true }, orderBy: { kickoffAt: "asc" } },
+          },
+        },
+      },
     });
 
     if (!room || room.status !== "ACTIVE") {
@@ -1283,26 +1315,40 @@ export async function saveRoomPredictionsAction(
       };
     }
 
-    const matches = await prisma.match.findMany({
-      orderBy: { matchNumber: "asc" },
-    });
+    if (!room.competition) {
+      return {
+        ok: false,
+        message: "La sala no tiene una competencia activa asociada.",
+      };
+    }
+
+    const matches = room.competition.matches.map((match) => ({
+      ...match,
+      stage: match.phase?.stage ?? "GROUP" as const,
+    }));
     const deadlineConfig = roomDeadlineConfig(room);
     const phaseDeadlines = computePhaseDeadlines(matches, new Date(), deadlineConfig);
-    const bonusMarkets = bonusMarketsFor(parseEnabledMarkets(room.ruleSet?.enabledMarkets));
+    const enabledMarkets = parseEnabledMarkets(room.ruleSet?.enabledMarkets);
+    const bonusMarkets = bonusMarketsFor(enabledMarkets);
+    const matchIds = matches.map((match) => match.id);
 
-    // Bulk-load existing predictions and answers to avoid N+1 queries inside the loop
     const [existingPredictions, existingAnswers] = await Promise.all([
       prisma.prediction.findMany({
-        where: { roomId, userId: user.id },
+        where: { roomId, userId: user.id, competitionMatchId: { in: matchIds } },
       }),
       prisma.predictionAnswer.findMany({
-        where: { roomId, userId: user.id },
+        where: { roomId, userId: user.id, competitionMatchId: { in: matchIds } },
       }),
     ]);
 
-    const predictionByMatch = new Map(existingPredictions.map((p) => [p.matchId, p]));
+    const predictionByMatch = new Map(
+      existingPredictions.map((prediction) => [prediction.competitionMatchId, prediction]),
+    );
     const answerByMatchAndMarket = new Map(
-      existingAnswers.map((a) => [`${a.matchId}:${a.marketKey}`, a]),
+      existingAnswers.map((answer) => [
+        `${answer.competitionMatchId}:${answer.marketKey}`,
+        answer,
+      ]),
     );
 
     for (const match of matches) {
@@ -1331,7 +1377,8 @@ export async function saveRoomPredictionsAction(
             existingPred.predictedHomeScore !== predictedHomeScore ||
             existingPred.predictedAwayScore !== predictedAwayScore ||
             existingPred.predictedWinnerSide !== null ||
-            existingPred.predictedWinnerTeamId !== null;
+            existingPred.predictedWinnerTeamId !== null ||
+            existingPred.predictedWinnerCompetitionTeamId !== null;
 
           if (changed) {
             if (existingPred) {
@@ -1342,6 +1389,7 @@ export async function saveRoomPredictionsAction(
                   predictedAwayScore,
                   predictedWinnerSide: null,
                   predictedWinnerTeamId: null,
+                  predictedWinnerCompetitionTeamId: null,
                   points: 0,
                 },
               });
@@ -1350,7 +1398,7 @@ export async function saveRoomPredictionsAction(
                 data: {
                   roomId,
                   userId: user.id,
-                  matchId: match.id,
+                  competitionMatchId: match.id,
                   predictedHomeScore,
                   predictedAwayScore,
                   predictedWinnerSide: null,
@@ -1373,7 +1421,7 @@ export async function saveRoomPredictionsAction(
           existingPred.predictedHomeScore !== predictedHomeScore ||
           existingPred.predictedAwayScore !== predictedAwayScore ||
           existingPred.predictedWinnerSide !== predictedWinnerSide ||
-          existingPred.predictedWinnerTeamId !== teamId;
+          existingPred.predictedWinnerCompetitionTeamId !== teamId;
 
         if (changed) {
           if (existingPred) {
@@ -1383,7 +1431,8 @@ export async function saveRoomPredictionsAction(
                 predictedHomeScore,
                 predictedAwayScore,
                 predictedWinnerSide,
-                predictedWinnerTeamId: teamId,
+                predictedWinnerTeamId: null,
+                predictedWinnerCompetitionTeamId: teamId,
                 points: 0,
               },
             });
@@ -1392,11 +1441,11 @@ export async function saveRoomPredictionsAction(
               data: {
                 roomId,
                 userId: user.id,
-                matchId: match.id,
+                competitionMatchId: match.id,
                 predictedHomeScore,
                 predictedAwayScore,
                 predictedWinnerSide,
-                predictedWinnerTeamId: teamId,
+                predictedWinnerCompetitionTeamId: teamId,
                 points: 0,
               },
             });
@@ -1405,7 +1454,7 @@ export async function saveRoomPredictionsAction(
       }
 
       // Sync market answers (only write to DB on change or deletion)
-      for (const market of bonusMarkets) {
+      for (const market of bonusMarketsForStage(enabledMarkets, match.stage)) {
         const value = readMarketValue(formData, market, match.id);
         const existingKey = `${match.id}:${market}`;
         const existingAnswer = answerByMatchAndMarket.get(existingKey);
@@ -1425,18 +1474,45 @@ export async function saveRoomPredictionsAction(
             data: {
               roomId,
               userId: user.id,
-              matchId: match.id,
+              competitionMatchId: match.id,
               marketKey: market,
-              value: value as any,
+              value: value as Prisma.InputJsonValue,
             },
           });
         } else if (valueJson !== existingJson) {
           await prisma.predictionAnswer.update({
             where: { id: existingAnswer.id },
-            data: { value: value as any, points: 0 },
+            data: { value: value as Prisma.InputJsonValue, points: 0 },
           });
         }
       }
+    }
+
+    const championTeamId = String(formData.get("championTeamId") ?? "").trim();
+    const championDeadline = championPickDeadlineAt(matches, room.deadlineHoursBefore);
+    const championOpen =
+      process.env.NODE_ENV === "development" ||
+      !championDeadline ||
+      new Date() < championDeadline;
+    const validChampion = room.competition.teams.some((team) => team.id === championTeamId);
+
+    if (room.championPickEnabled && championOpen && validChampion) {
+      await prisma.roomTournamentPick.upsert({
+        where: {
+          roomId_userId_competitionId: {
+            roomId,
+            userId: user.id,
+            competitionId: room.competition.id,
+          },
+        },
+        update: { predictedTeamId: championTeamId, points: 0 },
+        create: {
+          roomId,
+          userId: user.id,
+          competitionId: room.competition.id,
+          predictedTeamId: championTeamId,
+        },
+      });
     }
 
     await recalculateScores(roomId);
@@ -1798,71 +1874,18 @@ function readMarketValue(formData: FormData, market: RoomMarketKey, matchId: str
   return null;
 }
 
-async function saveRoomMarketAnswers({
-  roomId,
-  userId,
-  matchId,
-  markets,
-  formData,
-}: {
-  roomId: string;
-  userId: string;
-  matchId: string;
-  markets: RoomMarketKey[];
-  formData: FormData;
-}) {
-  for (const market of markets) {
-    const value = readMarketValue(formData, market, matchId);
-    const existing = await prisma.predictionAnswer.findUnique({
-      where: {
-        roomId_userId_matchId_marketKey: {
-          roomId,
-          userId,
-          matchId,
-          marketKey: market,
-        },
-      },
-      select: { id: true },
-    });
-
-    if (!value) {
-      if (existing) {
-        await prisma.predictionAnswer.delete({ where: { id: existing.id } });
-      }
-      continue;
-    }
-
-    await prisma.predictionAnswer.upsert({
-      where: {
-        roomId_userId_matchId_marketKey: {
-          roomId,
-          userId,
-          matchId,
-          marketKey: market,
-        },
-      },
-      update: { value, points: 0 },
-      create: {
-        roomId,
-        userId,
-        matchId,
-        marketKey: market,
-        value,
-      },
-    });
-  }
-}
-
 async function saveMatchMarketResults({
   db = prisma,
   matchId,
   markets,
   formData,
+  competitionMatch = false,
 }: {
   db?: typeof prisma | Prisma.TransactionClient;
   matchId: string;
   markets: RoomMarketKey[];
   formData: FormData;
+  competitionMatch?: boolean;
 }) {
   const results = markets.flatMap((market) => {
     const value = readMarketValue(formData, market, matchId);
@@ -1873,33 +1896,28 @@ async function saveMatchMarketResults({
 
   if (removedMarkets.length > 0) {
     await db.matchMarketResult.deleteMany({
-      where: { matchId, marketKey: { in: removedMarkets } },
+      where: competitionMatch
+        ? { competitionMatchId: matchId, marketKey: { in: removedMarkets } }
+        : { matchId, marketKey: { in: removedMarkets } },
     });
   }
 
-  if (results.length > 0) {
-    const values = Prisma.join(
-      results.map(({ market, value }) =>
-        Prisma.sql`(
-          ${crypto.randomUUID()}::text,
-          ${matchId}::text,
-          ${market}::text,
-          ${JSON.stringify(value)}::jsonb,
-          CURRENT_TIMESTAMP,
-          CURRENT_TIMESTAMP
-        )`,
-      ),
-    );
-
-    await db.$executeRaw(Prisma.sql`
-      INSERT INTO "MatchMarketResult" (
-        id, "matchId", "marketKey", value, "createdAt", "updatedAt"
-      )
-      VALUES ${values}
-      ON CONFLICT ("matchId", "marketKey") DO UPDATE SET
-        value = EXCLUDED.value,
-        "updatedAt" = CURRENT_TIMESTAMP
-    `);
+  for (const { market, value } of results) {
+    if (competitionMatch) {
+      await db.matchMarketResult.upsert({
+        where: {
+          competitionMatchId_marketKey: { competitionMatchId: matchId, marketKey: market },
+        },
+        update: { value },
+        create: { competitionMatchId: matchId, marketKey: market, value },
+      });
+    } else {
+      await db.matchMarketResult.upsert({
+        where: { matchId_marketKey: { matchId, marketKey: market } },
+        update: { value },
+        create: { matchId, marketKey: market, value },
+      });
+    }
   }
 }
 

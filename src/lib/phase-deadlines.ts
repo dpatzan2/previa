@@ -224,6 +224,18 @@ export function roomDeadlineConfig(room: {
   };
 }
 
+export function championPickDeadlineAt(
+  matches: Array<{ kickoffAt?: Date | null }>,
+  hoursBefore = 1,
+) {
+  const firstKickoff = matches
+    .map((match) => match.kickoffAt)
+    .filter((date): date is Date => Boolean(date))
+    .sort((left, right) => left.getTime() - right.getTime())[0];
+  if (!firstKickoff) return null;
+  return new Date(firstKickoff.getTime() - normalizedDeadlineHours(hoursBefore) * MS_HOUR);
+}
+
 export function phaseDeadlineBanner(
   deadline: SerializedPhaseDeadline,
   {

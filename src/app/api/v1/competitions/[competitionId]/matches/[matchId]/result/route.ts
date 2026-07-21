@@ -21,7 +21,7 @@ export async function GET(
   }
 
   const marketResults = await prisma.matchMarketResult.findMany({
-    where: { matchId },
+    where: { competitionMatchId: matchId },
     select: { marketKey: true, value: true, updatedAt: true },
     orderBy: { marketKey: "asc" },
   });

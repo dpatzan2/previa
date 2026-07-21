@@ -114,6 +114,18 @@ export default async function RoomDetailPage({
                 <dt>Quien pasa</dt>
                 <dd>{room.ruleSet?.advancePickPoints ?? 1} pt</dd>
               </div>
+              <div>
+                <dt>Campeon</dt>
+                <dd>{room.championPickEnabled ? `${room.championPickPoints} pts` : "Desactivado"}</dd>
+              </div>
+              <div>
+                <dt>Popular</dt>
+                <dd>{
+                  room.popularPredictionsVisibility === "ALWAYS" ? "Siempre" :
+                  room.popularPredictionsVisibility === "AFTER_PICK" ? "Despues del pick" :
+                  room.popularPredictionsVisibility === "AFTER_DEADLINE" ? "Al cierre" : "Oculto"
+                }</dd>
+              </div>
             </dl>
             {enabledMarkets.length > 0 ? (
               <div className="room-market-summary">

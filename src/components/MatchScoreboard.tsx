@@ -1,6 +1,7 @@
 import { Lock } from "lucide-react";
 import { TeamLabel } from "@/components/TeamLabel";
 import type { DisplayMatch, DisplayPrediction } from "@/lib/match-ui";
+import type { FormResult } from "@/lib/competition-insights";
 
 function scoreText(value: number | null | undefined) {
   return value === null || value === undefined ? "—" : String(value);
@@ -58,7 +59,7 @@ export function GroupMatchScoreboard({
 
       <div className="scoreboard-body">
         <div className="scoreboard-side home">
-          <TeamLabel name={match.home} />
+          <TeamLabel name={match.home} logoUrl={match.homeLogoUrl} />
         </div>
 
         {predictionHidden ? (
@@ -95,9 +96,10 @@ export function GroupMatchScoreboard({
         )}
 
         <div className="scoreboard-side away">
-          <TeamLabel name={match.away} />
+          <TeamLabel name={match.away} logoUrl={match.awayLogoUrl} />
         </div>
       </div>
+      <MatchRecentForm match={match} />
     </article>
   );
 }
@@ -163,7 +165,7 @@ export function KnockoutMatchScoreboard({
         <>
           <div className="scoreboard-body knockout-score-body">
             <div className="scoreboard-side home">
-              <TeamLabel name={match.home} />
+              <TeamLabel name={match.home} logoUrl={match.homeLogoUrl} />
             </div>
 
             {displayOnly ? (
@@ -199,18 +201,18 @@ export function KnockoutMatchScoreboard({
             )}
 
             <div className="scoreboard-side away">
-              <TeamLabel name={match.away} />
+              <TeamLabel name={match.away} logoUrl={match.awayLogoUrl} />
             </div>
           </div>
 
           {displayOnly ? (
             <div className="knockout-pick-grid readonly-grid">
               <div className={`knockout-option-body static${pickedHome ? " selected" : ""}`}>
-                <TeamLabel name={match.home} />
+                <TeamLabel name={match.home} logoUrl={match.homeLogoUrl} />
                 <small>{pickedHome ? "Pronostico" : "Pasa"}</small>
               </div>
               <div className={`knockout-option-body static${pickedAway ? " selected" : ""}`}>
-                <TeamLabel name={match.away} />
+                <TeamLabel name={match.away} logoUrl={match.awayLogoUrl} />
                 <small>{pickedAway ? "Pronostico" : "Pasa"}</small>
               </div>
             </div>
@@ -224,7 +226,7 @@ export function KnockoutMatchScoreboard({
                   defaultChecked={pickedHome}
                 />
                 <span className="knockout-option-body">
-                  <TeamLabel name={match.home} />
+                  <TeamLabel name={match.home} logoUrl={match.homeLogoUrl} />
                   <small>Pasa</small>
                 </span>
               </label>
@@ -236,14 +238,36 @@ export function KnockoutMatchScoreboard({
                   defaultChecked={pickedAway}
                 />
                 <span className="knockout-option-body">
-                  <TeamLabel name={match.away} />
+                  <TeamLabel name={match.away} logoUrl={match.awayLogoUrl} />
                   <small>Pasa</small>
                 </span>
               </label>
             </div>
           )}
+          <MatchRecentForm match={match} />
         </>
       )}
     </article>
+  );
+}
+
+function FormDots({ values }: { values: FormResult[] }) {
+  if (values.length === 0) return <span className="muted">Sin resultados</span>;
+  return (
+    <span className="recent-form-dots" aria-label="Ultimos resultados">
+      {values.map((value, index) => (
+        <span className={`form-dot ${value.toLowerCase()}`} key={`${value}-${index}`}>{value}</span>
+      ))}
+    </span>
+  );
+}
+
+function MatchRecentForm({ match }: { match: DisplayMatch }) {
+  if (!match.homeForm?.length && !match.awayForm?.length) return null;
+  return (
+    <div className="match-recent-form">
+      <div><small>{match.home}</small><FormDots values={match.homeForm ?? []} /></div>
+      <div><small>{match.away}</small><FormDots values={match.awayForm ?? []} /></div>
+    </div>
   );
 }

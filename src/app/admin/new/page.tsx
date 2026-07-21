@@ -54,6 +54,22 @@ export default async function NewCompetitionPage({
           <input name="season" placeholder="Ej. 2026/27" />
         </label>
 
+        <div className="scoring-rules-grid">
+          <label>
+            Pais o region
+            <input name="countryCode" placeholder="Ej. GT, UEFA, FIFA" />
+          </label>
+          <label>
+            URL del logo
+            <input name="logoUrl" type="url" placeholder="https://..." />
+          </label>
+        </div>
+
+        <label>
+          URL de portada
+          <input name="bannerUrl" type="url" placeholder="https://..." />
+        </label>
+
         <label>
           Estado
           <select name="status" defaultValue="DRAFT">

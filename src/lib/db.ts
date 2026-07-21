@@ -18,6 +18,7 @@ function isStalePrismaClient(client: PrismaClient) {
     typeof client.competitionPhase?.findMany !== "function" ||
     typeof client.competitionTeam?.findMany !== "function" ||
     typeof client.competitionMatch?.findMany !== "function" ||
+    typeof client.roomTournamentPick?.findMany !== "function" ||
     typeof client.roomLeaderboardEntry?.findMany !== "function"
   );
 }

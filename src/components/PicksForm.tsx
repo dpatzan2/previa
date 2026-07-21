@@ -1,6 +1,6 @@
 "use client";
 
-import { Save } from "lucide-react";
+import { Save, Trophy } from "lucide-react";
 import { useActionState, useMemo, useState } from "react";
 import { savePredictionsAction, saveRoomPredictionsAction } from "@/app/actions";
 import { FormFeedback, useActionFeedback } from "@/components/FormFeedback";
@@ -9,7 +9,8 @@ import { PhaseTabs } from "@/components/PhaseTabs";
 import { RoomMarketFields } from "@/components/RoomMarketFields";
 import { SubmitButton } from "@/components/SubmitButton";
 import { PredictionResultSummary } from "@/components/PredictionResultSummary";
-import type { DisplayMarketAnswer, DisplayMatch, DisplayPrediction, PeerPrediction } from "@/lib/match-ui";
+import { PopularPredictions } from "@/components/PopularPredictions";
+import type { DisplayMarketAnswer, DisplayMatch, DisplayPrediction, PeerPrediction, PopularPrediction } from "@/lib/match-ui";
 import {
   canViewPeerPredictions,
   deadlinesByStage,
@@ -20,7 +21,7 @@ import {
 } from "@/lib/phase-deadlines";
 import { stageLabels } from "@/lib/stages";
 import type { MatchStage } from "@prisma/client";
-import type { RoomMarketKey } from "@/lib/room-presets";
+import { bonusMarketsForStage, type RoomMarketKey } from "@/lib/room-presets";
 
 type PicksFormProps = {
   matches: DisplayMatch[];
@@ -38,6 +39,16 @@ type PicksFormProps = {
   >;
   deadlineMode?: PickDeadlineMode;
   deadlineHoursBefore?: number;
+  popularPredictions?: Record<string, PopularPrediction>;
+  competitionName?: string;
+  championPick?: {
+    enabled: boolean;
+    locked: boolean;
+    deadlineLabel: string | null;
+    selectedTeamId: string | null;
+    points: number;
+    teams: Array<{ id: string; name: string }>;
+  };
 };
 
 export function PicksForm({
@@ -53,6 +64,9 @@ export function PicksForm({
   officialMarketResults = {},
   deadlineMode,
   deadlineHoursBefore,
+  popularPredictions = {},
+  competitionName,
+  championPick,
 }: PicksFormProps) {
   const deadlineMap = deadlinesByStage(phaseDeadlines);
   const hasOpenPhases = useMemo(
@@ -66,10 +80,48 @@ export function PicksForm({
   const saveHandler = roomId ? saveRoomPredictionsAction : savePredictionsAction;
   const [saveState, saveAction, isSaving] = useActionState(saveHandler, null);
   const feedback = useActionFeedback(saveState);
+  const completedPicks = Object.values(predictions).filter(
+    (prediction) =>
+      prediction.predictedHomeScore !== null && prediction.predictedAwayScore !== null,
+  ).length;
 
   return (
     <form action={saveAction} className="prediction-form">
       {roomId ? <input type="hidden" name="roomId" value={roomId} /> : null}
+      <div className="picks-overview panel">
+        <div>
+          <span className="eyebrow">{competitionName ?? "Competencia"}</span>
+          <strong>{completedPicks} de {matches.length} pronosticados</strong>
+        </div>
+        <progress value={completedPicks} max={Math.max(matches.length, 1)} />
+      </div>
+
+      {championPick?.enabled ? (
+        <section className="champion-pick panel">
+          <Trophy size={22} />
+          <div>
+            <span className="eyebrow">Candidato de la competicion</span>
+            <strong>¿Quien sera campeon?</strong>
+            <small>
+              {championPick.deadlineLabel
+                ? `Limite: ${championPick.deadlineLabel}`
+                : "Sin fecha limite disponible"}
+              {` · ${championPick.points} pts`}
+            </small>
+          </div>
+          <select
+            name="championTeamId"
+            defaultValue={championPick.selectedTeamId ?? ""}
+            disabled={championPick.locked}
+            aria-label="Campeon de la competicion"
+          >
+            <option value="">Sin candidato</option>
+            {championPick.teams.map((team) => (
+              <option key={team.id} value={team.id}>{team.name}</option>
+            ))}
+          </select>
+        </section>
+      ) : null}
       <PhaseTabs
         availableStages={stages}
         groupCodes={groupCodes}
@@ -118,9 +170,18 @@ export function PicksForm({
                   const deadline = deadlineMap[match.stage];
                   const peerPicksVisible =
                     match.peerPicksVisible ?? canViewPeerPredictions(deadline);
+                  const visibleIndex = visibleMatches.findIndex((item) => item.id === match.id);
+                  const showDateHeading =
+                    isVisible &&
+                    visibleIndex >= 0 &&
+                    visibleMatches[visibleIndex - 1]?.dateLabel !== match.dateLabel;
+                  const availableBonusMarkets = bonusMarketsForStage(roomMarkets, match.stage);
+                  const hasBonusAnswers = Object.keys(marketAnswers[match.id] ?? {}).length > 0;
 
                   return (
-                    <div className={isVisible ? "match-pick-stack" : "match-pick-stack is-hidden"} key={match.id}>
+                    <div className={isVisible ? "match-day-entry" : "match-day-entry is-hidden"} key={match.id}>
+                      {showDateHeading ? <h3 className="match-day-heading">{match.dateLabel ?? "Fecha por definir"}</h3> : null}
+                      <div className={isVisible ? "match-pick-stack" : "match-pick-stack is-hidden"}>
                       <MatchPickCard
                         match={match}
                         prediction={prediction}
@@ -129,6 +190,12 @@ export function PicksForm({
                         phaseStartsLabel={deadline?.startsLabel}
                         hidden={!isVisible}
                       />
+                      {isVisible ? (
+                        <PopularPredictions
+                          match={match}
+                          prediction={popularPredictions[match.id]}
+                        />
+                      ) : null}
                       {isVisible ? (
                         <PredictionResultSummary
                           match={match}
@@ -139,15 +206,16 @@ export function PicksForm({
                           officialResults={officialMarketResults[match.id] ?? {}}
                         />
                       ) : null}
-                      {isVisible && roomMarkets.length > 0 ? (
-                        <details className="picks-market-details" style={{ marginTop: "12px", border: "1px dashed var(--line)", borderRadius: "6px", padding: "10px 14px", background: "var(--panel-soft)" }}>
-                          <summary style={{ cursor: "pointer", fontWeight: "bold", fontSize: "0.88rem", color: "var(--primary)" }}>
-                            Pronósticos de Bonus (Opcional)
+                      {isVisible && availableBonusMarkets.length > 0 ? (
+                        <details className="picks-market-details" open={hasBonusAnswers || undefined}>
+                          <summary>
+                            <span>Bonus opcionales</span>
+                            <small>{availableBonusMarkets.length} selecciones</small>
                           </summary>
-                          <div style={{ marginTop: "10px" }}>
+                          <div className="picks-market-content">
                             <RoomMarketFields
                               match={match}
-                              markets={roomMarkets}
+                              markets={availableBonusMarkets}
                               answers={Object.fromEntries(
                                 Object.entries(marketAnswers[match.id] ?? {}).map(([key, answer]) => [
                                   key,
@@ -158,6 +226,7 @@ export function PicksForm({
                           </div>
                         </details>
                       ) : null}
+                      </div>
                     </div>
                   );
                 })}

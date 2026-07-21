@@ -144,6 +144,30 @@ export default async function NewRoomPage({
           </label>
         </fieldset>
 
+        <fieldset className="room-preset-fieldset">
+          <legend>Experiencia de pronosticos</legend>
+          <label>
+            Predicciones populares
+            <select name="popularPredictionsVisibility" defaultValue="AFTER_PICK">
+              <option value="ALWAYS">Mostrar siempre</option>
+              <option value="AFTER_PICK">Despues de hacer mi pick</option>
+              <option value="AFTER_DEADLINE">Despues del cierre</option>
+              <option value="HIDDEN">No mostrar</option>
+            </select>
+            <small>Solo se muestran porcentajes anonimos, nunca quien eligio cada opcion.</small>
+          </label>
+          <div className="room-inline-settings">
+            <label className="checkbox-label">
+              <input type="checkbox" name="championPickEnabled" defaultChecked />
+              Permitir pronostico de campeon
+            </label>
+            <label className="room-inline-number">
+              Puntos por acertar
+              <input type="number" name="championPickPoints" min="0" max="99" defaultValue="5" />
+            </label>
+          </div>
+        </fieldset>
+
         <SubmitButton className="primary-button" pendingText="Creando...">
           Crear sala
         </SubmitButton>

@@ -1,33 +1,49 @@
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, CalendarX2 } from "lucide-react";
+import type { MatchStage, PopularPredictionsVisibility } from "@prisma/client";
 import { PicksForm } from "@/components/PicksForm";
 import { RoomHeader } from "@/components/RoomHeader";
 import { requireUser } from "@/lib/auth";
+import { popularOutcome, recentForm } from "@/lib/competition-insights";
 import { prisma } from "@/lib/db";
-import { teamName, withGuatemalaSchedule } from "@/lib/match-ui";
-import type { DisplayMarketAnswer, PeerPrediction } from "@/lib/match-ui";
+import type {
+  DisplayMarketAnswer,
+  PeerPrediction,
+  PopularPrediction,
+} from "@/lib/match-ui";
+import { withGuatemalaSchedule } from "@/lib/match-ui";
 import {
   canViewPeerPredictionsForMatch,
+  championPickDeadlineAt,
   computePhaseDeadlines,
   isMatchLockedForPicks,
   matchDeadlineAt,
   roomDeadlineConfig,
   serializePhaseDeadlines,
 } from "@/lib/phase-deadlines";
-import { requireRoomMembership } from "@/lib/rooms";
 import { bonusMarketsFor, parseEnabledMarkets, type RoomMarketKey } from "@/lib/room-presets";
+import { requireRoomMembership } from "@/lib/rooms";
 import { stageOrder } from "@/lib/stages";
 import { formatAppDateTime } from "@/lib/timezone";
-import type { MatchStage } from "@prisma/client";
 
-function normalizeText(value: string) {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/\./g, "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .toUpperCase();
+function stageFor(phase: { stage: MatchStage | null; format: string } | null): MatchStage {
+  if (phase?.stage) return phase.stage;
+  return phase?.format === "KNOCKOUT" ? "ROUND_OF_16" : "GROUP";
+}
+
+function percent(value: number, total: number) {
+  return total > 0 ? Math.round((value / total) * 100) : 0;
+}
+
+function popularVisible(
+  visibility: PopularPredictionsVisibility,
+  hasOwnPick: boolean,
+  locked: boolean,
+) {
+  if (visibility === "ALWAYS") return true;
+  if (visibility === "AFTER_PICK") return hasOwnPick;
+  if (visibility === "AFTER_DEADLINE") return locked;
+  return false;
 }
 
 export default async function RoomPicksPage({
@@ -39,354 +55,206 @@ export default async function RoomPicksPage({
   const { roomId } = await params;
   const { room, membership } = await requireRoomMembership(roomId, user.id);
   const canManage = membership.role === "OWNER" || membership.role === "ADMIN";
+
+  if (!room.externalTournamentId) {
+    return (
+      <div className="page">
+        <Link className="back-link" href="/rooms"><ArrowLeft size={16} />Volver a salas</Link>
+        <RoomHeader roomId={room.id} roomName={room.name} accessCode={room.accessCode} activeTab="picks" canManage={canManage} />
+        <section className="panel empty-state-panel">
+          <CalendarX2 size={24} />
+          <h2>Esta sala no tiene una competencia asociada</h2>
+          <p className="muted">El administrador de la sala debe seleccionar una competencia.</p>
+        </section>
+      </div>
+    );
+  }
+
+  const competition = await prisma.competition.findUnique({
+    where: { id: room.externalTournamentId },
+    include: {
+      teams: { orderBy: { name: "asc" } },
+      matches: {
+        include: { phase: true, homeTeam: true, awayTeam: true },
+        orderBy: [{ kickoffAt: "asc" }, { matchNumber: "asc" }],
+      },
+    },
+  });
+  if (!competition) {
+    return (
+      <div className="page">
+        <Link className="back-link" href="/rooms"><ArrowLeft size={16} />Volver a salas</Link>
+        <RoomHeader roomId={room.id} roomName={room.name} accessCode={room.accessCode} activeTab="picks" canManage={canManage} />
+        <section className="panel empty-state-panel"><h2>Competencia no disponible</h2></section>
+      </div>
+    );
+  }
+
+  const matchIds = competition.matches.map((match) => match.id);
   const memberIds = room.members.map((member) => member.userId);
   const roomMarkets = bonusMarketsFor(parseEnabledMarkets(room.ruleSet?.enabledMarkets));
   const deadlineConfig = roomDeadlineConfig(room);
+  const deadlineMatches = competition.matches.map((match) => ({
+    ...match,
+    stage: stageFor(match.phase),
+  }));
 
-  // Auto-healing logic: link existing rooms to competition by matching name if externalTournamentId is null
-  let competitionId = room.externalTournamentId;
-  if (!competitionId && room.tournamentName) {
-    const matchingComp = await prisma.competition.findFirst({
-      where: { name: room.tournamentName },
-      select: { id: true },
-    });
-    if (matchingComp) {
-      competitionId = matchingComp.id;
-      await prisma.room.update({
-        where: { id: room.id },
-        data: { externalTournamentId: competitionId },
-      });
-    }
-  }
-
-  // Fetch competition matches if linked
-  let compMatches: any[] = [];
-  if (competitionId) {
-    compMatches = await prisma.competitionMatch.findMany({
-      where: { competitionId },
-      include: { phase: true, homeTeam: true, awayTeam: true },
-      orderBy: { matchNumber: "asc" },
-    });
-
-    // 1. Bulk fetch existing legacy matches to check if we can bypass the sync loop entirely
-    const compMatchIds = compMatches.map((m) => m.id);
-    const existingLegacyMatches = await prisma.match.findMany({
-      where: { id: { in: compMatchIds } },
-      select: { id: true, status: true, homeScore: true, awayScore: true },
-    });
-    const existingLegacyMatchMap = new Map(existingLegacyMatches.map((m) => [m.id, m]));
-
-    // We only need to sync matches that:
-    // a) Do not exist in the legacy table
-    // b) Have a different status or different scores (updated by admin)
-    const matchesToSync = compMatches.filter((cm) => {
-      const lm = existingLegacyMatchMap.get(cm.id);
-      if (!lm) return true;
-      return lm.status !== cm.status || lm.homeScore !== cm.homeScore || lm.awayScore !== cm.awayScore;
-    });
-
-    if (matchesToSync.length > 0) {
-      // Collect all unique team names to upsert them in bulk
-      const uniqueTeamNames = new Set<string>();
-      for (const cm of matchesToSync) {
-        if (cm.homeTeam) uniqueTeamNames.add(cm.homeTeam.name);
-        if (cm.awayTeam) uniqueTeamNames.add(cm.awayTeam.name);
-      }
-
-      // Fetch existing global teams
-      const existingGlobalTeams = await prisma.team.findMany({
-        where: {
-          OR: [
-            { name: { in: Array.from(uniqueTeamNames) } },
-            { normalizedName: { in: Array.from(uniqueTeamNames).map(normalizeText) } },
-          ],
+  const [predictions, allPredictions, predictionAnswers, marketResults, championPick] =
+    await Promise.all([
+      prisma.prediction.findMany({
+        where: { roomId, userId: user.id, competitionMatchId: { in: matchIds } },
+      }),
+      prisma.prediction.findMany({
+        where: { roomId, userId: { in: memberIds }, competitionMatchId: { in: matchIds } },
+        include: {
+          user: { select: { displayName: true } },
+          predictedWinnerCompetitionTeam: { select: { name: true } },
         },
-      });
-      const globalTeamByName = new Map(
-        existingGlobalTeams.map((t) => [t.normalizedName, t])
-      );
-
-      // Bulk create missing global teams
-      const teamsToCreate = [];
-      for (const name of uniqueTeamNames) {
-        const norm = normalizeText(name);
-        if (!globalTeamByName.has(norm)) {
-          teamsToCreate.push({
-            name,
-            normalizedName: norm,
-          });
-        }
-      }
-
-      if (teamsToCreate.length > 0) {
-        await prisma.team.createMany({
-          data: teamsToCreate,
-          skipDuplicates: true,
-        });
-        const newlyCreatedTeams = await prisma.team.findMany({
-          where: { normalizedName: { in: teamsToCreate.map((t) => t.normalizedName) } },
-        });
-        for (const t of newlyCreatedTeams) {
-          globalTeamByName.set(t.normalizedName, t);
-        }
-      }
-
-      const getGlobalTeamId = (compTeam: any) => {
-        if (!compTeam) return null;
-        const norm = normalizeText(compTeam.name);
-        return globalTeamByName.get(norm)?.id ?? null;
-      };
-
-      const matchesToCreate = [];
-      const matchesToUpdate = [];
-
-      for (const compMatch of matchesToSync) {
-        const lm = existingLegacyMatchMap.get(compMatch.id);
-        if (!lm) {
-          matchesToCreate.push(compMatch);
-        } else {
-          matchesToUpdate.push(compMatch);
-        }
-      }
-
-      // Sync inserts (createMany in bulk)
-      if (matchesToCreate.length > 0) {
-        const maxLegacyMatch = await prisma.match.findFirst({
-          orderBy: { matchNumber: "desc" },
-          select: { matchNumber: true },
-        });
-        let nextLegacyMatchNumber = (maxLegacyMatch?.matchNumber ?? 0) + 1;
-
-        const createData = matchesToCreate.map((compMatch) => {
-          const legacyMatchNumber = nextLegacyMatchNumber++;
-          const mappedGroupCode = compMatch.phase?.groupCode || compMatch.phase?.name || null;
-          const mappedStage = compMatch.phase?.stage ?? "GROUP";
-
-          return {
-            id: compMatch.id,
-            matchNumber: legacyMatchNumber,
-            stage: mappedStage,
-            groupCode: mappedGroupCode,
-            kickoffAt: compMatch.kickoffAt,
-            venue: compMatch.venue,
-            homeTeamId: getGlobalTeamId(compMatch.homeTeam),
-            awayTeamId: getGlobalTeamId(compMatch.awayTeam),
-            homePlaceholder: compMatch.homePlaceholder,
-            awayPlaceholder: compMatch.awayPlaceholder,
-            homeScore: compMatch.homeScore,
-            awayScore: compMatch.awayScore,
-            status: compMatch.status,
-          };
-        });
-
-        await prisma.match.createMany({
-          data: createData,
-          skipDuplicates: true,
-        });
-      }
-
-      // Sync updates (in transaction)
-      if (matchesToUpdate.length > 0) {
-        await prisma.$transaction(
-          matchesToUpdate.map((compMatch) => {
-            const mappedGroupCode = compMatch.phase?.groupCode || compMatch.phase?.name || null;
-            const mappedStage = compMatch.phase?.stage ?? "GROUP";
-
-            return prisma.match.update({
-              where: { id: compMatch.id },
-              data: {
-                stage: mappedStage,
-                groupCode: mappedGroupCode,
-                kickoffAt: compMatch.kickoffAt,
-                venue: compMatch.venue,
-                homeTeamId: getGlobalTeamId(compMatch.homeTeam),
-                awayTeamId: getGlobalTeamId(compMatch.awayTeam),
-                homePlaceholder: compMatch.homePlaceholder,
-                awayPlaceholder: compMatch.awayPlaceholder,
-                homeScore: compMatch.homeScore,
-                awayScore: compMatch.awayScore,
-                status: compMatch.status,
-              },
-            });
+        orderBy: { user: { displayName: "asc" } },
+      }),
+      prisma.predictionAnswer.findMany({
+        where: { roomId, userId: user.id, competitionMatchId: { in: matchIds }, marketKey: { in: roomMarkets } },
+      }),
+      prisma.matchMarketResult.findMany({
+        where: { competitionMatchId: { in: matchIds } },
+        select: { competitionMatchId: true, marketKey: true, value: true },
+      }),
+      room.championPickEnabled
+        ? prisma.roomTournamentPick.findUnique({
+            where: {
+              roomId_userId_competitionId: { roomId, userId: user.id, competitionId: competition.id },
+            },
           })
-        );
-      }
-    }
-  }
+        : null,
+    ]);
 
-  const matchFilter = competitionId
-    ? { id: { in: compMatches.map((m) => m.id) } }
-    : {};
-
-  const [matches, predictions, peerPredictions, predictionAnswers, marketResults] = await Promise.all([
-    prisma.match.findMany({
-      where: matchFilter,
-      include: { homeTeam: true, awayTeam: true },
-      orderBy: { matchNumber: "asc" },
-    }),
-    prisma.prediction.findMany({
-      where: { userId: user.id, roomId },
-      select: {
-        matchId: true,
-        predictedHomeScore: true,
-        predictedAwayScore: true,
-        predictedWinnerSide: true,
-        points: true,
-      },
-    }),
-    prisma.prediction.findMany({
-      where: {
-        roomId,
-        userId: { in: memberIds.filter((id) => id !== user.id) },
-      },
-      select: {
-        userId: true,
-        matchId: true,
-        predictedHomeScore: true,
-        predictedAwayScore: true,
-        predictedWinnerSide: true,
-        points: true,
-        user: { select: { displayName: true } },
-        predictedWinnerTeam: { select: { name: true } },
-      },
-      orderBy: { user: { displayName: "asc" } },
-    }),
-    prisma.predictionAnswer.findMany({
-      where: {
-        roomId,
-        userId: user.id,
-        marketKey: { in: roomMarkets },
-      },
-    }),
-    prisma.matchMarketResult.findMany({
-      where: competitionId ? { matchId: { in: compMatches.map((match) => match.id) } } : undefined,
-      select: { matchId: true, marketKey: true, value: true },
-    }),
-  ]);
-
-  const phaseDeadlines = computePhaseDeadlines(matches, new Date(), deadlineConfig);
-  const matchById = new Map(matches.map((match) => [match.id, match]));
+  const now = new Date();
+  const phaseDeadlines = computePhaseDeadlines(deadlineMatches, now, deadlineConfig);
+  const ownByMatch = new Map(predictions.map((prediction) => [prediction.competitionMatchId, prediction]));
   const bonusPointsByMatch = new Map<string, number>();
   for (const answer of predictionAnswers) {
+    if (!answer.competitionMatchId) continue;
     bonusPointsByMatch.set(
-      answer.matchId,
-      (bonusPointsByMatch.get(answer.matchId) ?? 0) + answer.points,
+      answer.competitionMatchId,
+      (bonusPointsByMatch.get(answer.competitionMatchId) ?? 0) + answer.points,
     );
   }
+
   const predictionMap = Object.fromEntries(
-    predictions.map((item) => [
-      item.matchId,
-      {
-        predictedHomeScore: item.predictedHomeScore,
-        predictedAwayScore: item.predictedAwayScore,
-        predictedWinnerSide: item.predictedWinnerSide,
-        points: item.points,
-        bonusPoints: bonusPointsByMatch.get(item.matchId) ?? 0,
-      },
-    ]),
+    predictions.flatMap((prediction) =>
+      prediction.competitionMatchId
+        ? [[prediction.competitionMatchId, {
+            predictedHomeScore: prediction.predictedHomeScore,
+            predictedAwayScore: prediction.predictedAwayScore,
+            predictedWinnerSide: prediction.predictedWinnerSide,
+            points: prediction.points,
+            bonusPoints: bonusPointsByMatch.get(prediction.competitionMatchId) ?? 0,
+          }]]
+        : [],
+    ),
   );
 
   const peersByMatch: Record<string, PeerPrediction[]> = {};
-  for (const item of peerPredictions) {
-    const match = matchById.get(item.matchId);
-    if (!match) continue;
-    if (!canViewPeerPredictionsForMatch(match, phaseDeadlines, new Date(), deadlineConfig)) continue;
-
-    const peer: PeerPrediction = {
-      userId: item.userId,
-      displayName: item.user.displayName,
-      predictedHomeScore: item.predictedHomeScore,
-      predictedAwayScore: item.predictedAwayScore,
-      predictedWinnerSide: item.predictedWinnerSide,
-      pickedTeamName: item.predictedWinnerTeam?.name ?? null,
-      points: item.points,
-    };
-    if (!peersByMatch[item.matchId]) peersByMatch[item.matchId] = [];
-    peersByMatch[item.matchId].push(peer);
+  for (const prediction of allPredictions) {
+    if (!prediction.competitionMatchId || prediction.userId === user.id) continue;
+    const match = deadlineMatches.find((item) => item.id === prediction.competitionMatchId);
+    if (!match || !canViewPeerPredictionsForMatch(match, phaseDeadlines, now, deadlineConfig)) continue;
+    (peersByMatch[prediction.competitionMatchId] ??= []).push({
+      userId: prediction.userId,
+      displayName: prediction.user.displayName,
+      predictedHomeScore: prediction.predictedHomeScore,
+      predictedAwayScore: prediction.predictedAwayScore,
+      predictedWinnerSide: prediction.predictedWinnerSide,
+      pickedTeamName: prediction.predictedWinnerCompetitionTeam?.name ?? null,
+      points: prediction.points,
+    });
   }
 
   const marketAnswers: Record<string, Partial<Record<RoomMarketKey, DisplayMarketAnswer>>> = {};
   for (const answer of predictionAnswers) {
-    if (!marketAnswers[answer.matchId]) marketAnswers[answer.matchId] = {};
-    marketAnswers[answer.matchId][answer.marketKey as RoomMarketKey] = {
-      value:
-        answer.value && typeof answer.value === "object" && !Array.isArray(answer.value)
-          ? (answer.value as Record<string, unknown>)
-          : {},
+    if (!answer.competitionMatchId) continue;
+    (marketAnswers[answer.competitionMatchId] ??= {})[answer.marketKey as RoomMarketKey] = {
+      value: answer.value && typeof answer.value === "object" && !Array.isArray(answer.value)
+        ? answer.value as Record<string, unknown>
+        : {},
       points: answer.points,
     };
   }
 
-  const officialMarketResults: Record<
-    string,
-    Partial<Record<RoomMarketKey, Record<string, unknown>>>
-  > = {};
+  const officialMarketResults: Record<string, Partial<Record<RoomMarketKey, Record<string, unknown>>>> = {};
   for (const result of marketResults) {
-    if (!officialMarketResults[result.matchId]) officialMarketResults[result.matchId] = {};
-    officialMarketResults[result.matchId][result.marketKey as RoomMarketKey] =
+    if (!result.competitionMatchId) continue;
+    (officialMarketResults[result.competitionMatchId] ??= {})[result.marketKey as RoomMarketKey] =
       result.value && typeof result.value === "object" && !Array.isArray(result.value)
-        ? (result.value as Record<string, unknown>)
+        ? result.value as Record<string, unknown>
         : {};
   }
 
-  const displayMatches = matches.map((match) => {
-    const pickDeadline = matchDeadlineAt(match, deadlineConfig);
+  const popularPredictions: Record<string, PopularPrediction> = {};
+  for (const match of deadlineMatches) {
+    const picks = allPredictions.filter((prediction) => prediction.competitionMatchId === match.id);
+    const outcomes = picks.map((pick) => popularOutcome(pick.predictedHomeScore, pick.predictedAwayScore));
+    const total = outcomes.filter(Boolean).length;
+    const locked = isMatchLockedForPicks(match, phaseDeadlines, now, deadlineConfig);
+    const own = ownByMatch.get(match.id);
+    popularPredictions[match.id] = {
+      visible: popularVisible(room.popularPredictionsVisibility, Boolean(own), locked),
+      total,
+      homePercent: percent(outcomes.filter((value) => value === "HOME").length, total),
+      drawPercent: percent(outcomes.filter((value) => value === "DRAW").length, total),
+      awayPercent: percent(outcomes.filter((value) => value === "AWAY").length, total),
+      advanceHomePercent: percent(picks.filter((pick) => pick.predictedWinnerSide === "HOME").length, picks.length),
+      advanceAwayPercent: percent(picks.filter((pick) => pick.predictedWinnerSide === "AWAY").length, picks.length),
+    };
+  }
+
+  const displayMatches = competition.matches.map((match, index) => {
+    const stage = stageFor(match.phase);
+    const deadlineMatch = { ...match, stage };
+    const pickDeadline = matchDeadlineAt(deadlineMatch, deadlineConfig);
     return withGuatemalaSchedule({
       id: match.id,
-      matchNumber: match.matchNumber,
-      stage: match.stage,
-      groupCode: match.groupCode,
-      dateLabel: match.dateLabel,
-      timeLabel: match.timeLabel,
+      matchNumber: match.matchNumber ?? index + 1,
+      stage,
+      groupCode: stage === "GROUP" ? match.phase?.groupCode ?? match.phase?.name ?? "General" : null,
+      dateLabel: null,
+      timeLabel: null,
       kickoffAt: match.kickoffAt,
       venue: match.venue,
-      venueShort: match.venueShort,
-      locked: isMatchLockedForPicks(match, phaseDeadlines, new Date(), deadlineConfig),
-      peerPicksVisible: canViewPeerPredictionsForMatch(match, phaseDeadlines, new Date(), deadlineConfig),
-      home: teamName(match.homeTeam, match.homePlaceholder, "Local"),
-      away: teamName(match.awayTeam, match.awayPlaceholder, "Visitante"),
+      venueShort: null,
+      locked: isMatchLockedForPicks(deadlineMatch, phaseDeadlines, now, deadlineConfig),
+      peerPicksVisible: canViewPeerPredictionsForMatch(deadlineMatch, phaseDeadlines, now, deadlineConfig),
+      home: match.homeTeam?.name ?? match.homePlaceholder ?? "Local",
+      away: match.awayTeam?.name ?? match.awayPlaceholder ?? "Visitante",
+      homeLogoUrl: match.homeTeam?.logoUrl ?? null,
+      awayLogoUrl: match.awayTeam?.logoUrl ?? null,
+      homeForm: match.homeTeamId ? recentForm(competition.matches, match.homeTeamId) : [],
+      awayForm: match.awayTeamId ? recentForm(competition.matches, match.awayTeamId) : [],
       homeTeamId: match.homeTeamId,
       awayTeamId: match.awayTeamId,
       homeScore: match.homeScore,
       awayScore: match.awayScore,
       actualWinnerSide: match.actualWinnerSide,
       status: match.status,
-      pickDeadlineLabel:
-        match.stage === "GROUP" || !pickDeadline ? null : formatAppDateTime(pickDeadline),
+      pickDeadlineLabel: pickDeadline ? formatAppDateTime(pickDeadline) : null,
     });
   });
 
-  const groupCodes = Array.from(
-    new Set(
-      displayMatches
-        .filter((match) => match.stage === "GROUP")
-        .map((match) => match.groupCode)
-        .filter(Boolean),
-    ),
-  ).sort() as string[];
-
-  const stages = stageOrder.filter((stage) =>
-    displayMatches.some((match) => match.stage === stage),
-  ) as MatchStage[];
+  const groupCodes = [...new Set(displayMatches.filter((match) => match.stage === "GROUP").map((match) => match.groupCode).filter(Boolean))].sort() as string[];
+  const stages = stageOrder.filter((stage) => displayMatches.some((match) => match.stage === stage));
+  const championDeadline = championPickDeadlineAt(competition.matches, room.deadlineHoursBefore);
 
   return (
     <div className="page">
-      <Link className="back-link" href="/rooms">
-        <ArrowLeft size={16} />
-        Volver a salas
-      </Link>
-      <RoomHeader
-        roomId={room.id}
-        roomName={room.name}
-        accessCode={room.accessCode}
-        activeTab="picks"
-        canManage={canManage}
-      />
+      <Link className="back-link" href="/rooms"><ArrowLeft size={16} />Volver a salas</Link>
+      <RoomHeader roomId={room.id} roomName={room.name} accessCode={room.accessCode} activeTab="picks" canManage={canManage} />
       <PicksForm
         roomId={room.id}
+        competitionName={competition.name}
         matches={displayMatches}
         predictions={predictionMap}
         peersByMatch={peersByMatch}
+        popularPredictions={popularPredictions}
         groupCodes={groupCodes}
         stages={stages}
         phaseDeadlines={serializePhaseDeadlines(phaseDeadlines)}
@@ -395,6 +263,14 @@ export default async function RoomPicksPage({
         officialMarketResults={officialMarketResults}
         deadlineMode={deadlineConfig.mode}
         deadlineHoursBefore={deadlineConfig.hoursBefore}
+        championPick={{
+          enabled: room.championPickEnabled,
+          locked: process.env.NODE_ENV !== "development" && Boolean(championDeadline && now >= championDeadline),
+          deadlineLabel: championDeadline ? formatAppDateTime(championDeadline) : null,
+          selectedTeamId: championPick?.predictedTeamId ?? null,
+          points: room.championPickPoints,
+          teams: competition.teams.map((team) => ({ id: team.id, name: team.name })),
+        }}
       />
     </div>
   );
