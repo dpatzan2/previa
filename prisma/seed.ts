@@ -7,6 +7,8 @@ import fixture from "./fixture-data.json";
 import { parseAppDateTime } from "../src/lib/timezone";
 import { scorePrediction } from "../src/lib/scoring";
 
+const DEFAULT_ROOM_CODE = "MUNDIAL";
+
 const defaultSeedScoringRules = {
   groupExactPoints: 3,
   groupOutcomePoints: 1,
@@ -79,7 +81,7 @@ async function main() {
   const password = process.env.ADMIN_PASSWORD ?? "admin";
   const displayName = process.env.ADMIN_DISPLAY_NAME ?? "Administrador";
 
-  await prisma.user.upsert({
+  const adminUser = await prisma.user.upsert({
     where: { username },
     update: {
       displayName,
@@ -102,6 +104,114 @@ async function main() {
     create: { id: "default", ...defaultSeedScoringRules },
   });
 
+  const defaultRoom = await prisma.room.upsert({
+    where: { accessCode: DEFAULT_ROOM_CODE },
+    update: {
+      name: "Mundial Quiniela 2026",
+      tournamentName: "Mundial 2026",
+      tournamentType: "WORLD_CUP",
+      configPreset: "BASIC",
+      ownerId: adminUser.id,
+    },
+    create: {
+      name: "Mundial Quiniela 2026",
+      accessCode: DEFAULT_ROOM_CODE,
+      tournamentName: "Mundial 2026",
+      tournamentType: "WORLD_CUP",
+      configPreset: "BASIC",
+      ownerId: adminUser.id,
+      ruleSet: {
+        create: {
+          preset: "BASIC",
+          exactScorePoints: defaultSeedScoringRules.groupExactPoints,
+          outcomePoints: defaultSeedScoringRules.groupOutcomePoints,
+          advancePickPoints: defaultSeedScoringRules.knockoutAdvancePoints,
+          enabledMarkets: ["EXACT_SCORE", "MATCH_OUTCOME", "ADVANCING_TEAM"],
+        },
+      },
+    },
+  });
+
+  await prisma.roomRuleSet.upsert({
+    where: { roomId: defaultRoom.id },
+    update: {
+      preset: "BASIC",
+      exactScorePoints: defaultSeedScoringRules.groupExactPoints,
+      outcomePoints: defaultSeedScoringRules.groupOutcomePoints,
+      advancePickPoints: defaultSeedScoringRules.knockoutAdvancePoints,
+      enabledMarkets: ["EXACT_SCORE", "MATCH_OUTCOME", "ADVANCING_TEAM"],
+    },
+    create: {
+      roomId: defaultRoom.id,
+      preset: "BASIC",
+      exactScorePoints: defaultSeedScoringRules.groupExactPoints,
+      outcomePoints: defaultSeedScoringRules.groupOutcomePoints,
+      advancePickPoints: defaultSeedScoringRules.knockoutAdvancePoints,
+      enabledMarkets: ["EXACT_SCORE", "MATCH_OUTCOME", "ADVANCING_TEAM"],
+    },
+  });
+
+  await prisma.roomMember.upsert({
+    where: { roomId_userId: { roomId: defaultRoom.id, userId: adminUser.id } },
+    update: { role: "OWNER" },
+    create: {
+      roomId: defaultRoom.id,
+      userId: adminUser.id,
+      role: "OWNER",
+    },
+  });
+
+  const participants = await prisma.user.findMany({
+    where: { isActive: true, canParticipate: true },
+    select: { id: true },
+  });
+
+  for (const participant of participants) {
+    await prisma.roomMember.upsert({
+      where: { roomId_userId: { roomId: defaultRoom.id, userId: participant.id } },
+      update: {},
+      create: {
+        roomId: defaultRoom.id,
+        userId: participant.id,
+        role: "MEMBER",
+      },
+    });
+  }
+
+  const globalPredictions = await prisma.prediction.findMany({
+    where: { roomId: null },
+    include: { match: true },
+  });
+
+  for (const prediction of globalPredictions) {
+    await prisma.prediction.upsert({
+      where: {
+        roomId_userId_matchId: {
+          roomId: defaultRoom.id,
+          userId: prediction.userId,
+          matchId: prediction.matchId,
+        },
+      },
+      update: {
+        predictedHomeScore: prediction.predictedHomeScore,
+        predictedAwayScore: prediction.predictedAwayScore,
+        predictedWinnerTeamId: prediction.predictedWinnerTeamId,
+        predictedWinnerSide: prediction.predictedWinnerSide,
+        points: prediction.points,
+      },
+      create: {
+        roomId: defaultRoom.id,
+        userId: prediction.userId,
+        matchId: prediction.matchId,
+        predictedHomeScore: prediction.predictedHomeScore,
+        predictedAwayScore: prediction.predictedAwayScore,
+        predictedWinnerTeamId: prediction.predictedWinnerTeamId,
+        predictedWinnerSide: prediction.predictedWinnerSide,
+        points: prediction.points,
+      },
+    });
+  }
+
   const predictions = await prisma.prediction.findMany({ include: { match: true } });
   for (const prediction of predictions) {
     await prisma.prediction.update({
@@ -113,6 +223,7 @@ async function main() {
   }
 
   console.log("Seed complete");
+  console.log(`Sala default: ${defaultRoom.name} (${defaultRoom.accessCode})`);
   if (predictions.length > 0) {
     console.log(`Pronosticos recalculados: ${predictions.length}`);
   }

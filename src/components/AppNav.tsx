@@ -1,14 +1,11 @@
 import Link from "next/link";
-import { BarChart3, ClipboardList, Gauge, Settings } from "lucide-react";
+import { CalendarDays, Gauge, Settings, Users } from "lucide-react";
 import type { Role } from "@prisma/client";
-import { canParticipateInPool } from "@/lib/participants";
 
 export function AppNav({
   role,
-  canParticipate,
 }: {
   role: Role;
-  canParticipate: boolean;
 }) {
   return (
     <nav className="nav-list">
@@ -16,15 +13,13 @@ export function AppNav({
         <Gauge size={18} />
         Panel
       </Link>
-      {canParticipateInPool({ canParticipate }) ? (
-        <Link href="/picks">
-          <ClipboardList size={18} />
-          Pronosticos
-        </Link>
-      ) : null}
-      <Link href="/leaderboard">
-        <BarChart3 size={18} />
-        Tabla
+      <Link href="/rooms">
+        <Users size={18} />
+        Salas
+      </Link>
+      <Link href="/calendar">
+        <CalendarDays size={18} />
+        Calendario
       </Link>
       {role === "ADMIN" ? (
         <Link href="/admin">

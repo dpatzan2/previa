@@ -12,7 +12,15 @@ function createPrismaClient() {
 }
 
 function isStalePrismaClient(client: PrismaClient) {
-  return typeof client.scoringSettings?.findUnique !== "function";
+  return (
+    typeof client.scoringSettings?.findUnique !== "function" ||
+    typeof client.competition?.findMany !== "function" ||
+    typeof client.competitionPhase?.findMany !== "function" ||
+    typeof client.competitionTeam?.findMany !== "function" ||
+    typeof client.competitionMatch?.findMany !== "function" ||
+    typeof client.roomTournamentPick?.findMany !== "function" ||
+    typeof client.roomLeaderboardEntry?.findMany !== "function"
+  );
 }
 
 function getPrismaClient() {

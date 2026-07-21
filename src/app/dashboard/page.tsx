@@ -1,88 +1,152 @@
-import { CheckCircle2, Medal, Shield, Users } from "lucide-react";
-import { NextMatchMetric } from "@/components/NextMatchMetric";
-import { QuinielaRulesPanel } from "@/components/QuinielaRulesPanel";
+import Link from "next/link";
+import { CalendarDays, Layers3, Trophy, Users } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { isNonParticipatingAdmin, participantWhere } from "@/lib/participants";
-import { getScoringRules } from "@/lib/scoring-settings";
-import { stageLabels } from "@/lib/stages";
+import { tournamentTypeLabels } from "@/lib/room-presets";
+import { formatAppDateTime } from "@/lib/timezone";
 
 export default async function DashboardPage() {
   const user = await requireUser();
-  const isManagerOnly = isNonParticipatingAdmin(user);
-
-  const [matches, participantCount, mine, scoringRules] = await Promise.all([
-    prisma.match.findMany({
-      include: { homeTeam: true, awayTeam: true },
-      orderBy: { matchNumber: "asc" },
+  const [
+    roomsCount,
+    myRooms,
+    competitions,
+    activeCompetitions,
+    membersCount,
+    upcomingMatches,
+  ] = await Promise.all([
+    prisma.room.count({ where: { status: "ACTIVE" } }),
+    prisma.roomMember.findMany({
+      where: { userId: user.id, room: { status: "ACTIVE" } },
+      include: { room: { include: { members: true } } },
+      orderBy: { joinedAt: "desc" },
+      take: 4,
     }),
-    prisma.user.count({ where: participantWhere }),
-    user.canParticipate
-      ? prisma.prediction.findMany({ where: { userId: user.id } })
-      : Promise.resolve([]),
-    getScoringRules(),
+    prisma.competition.findMany({
+      include: {
+        _count: {
+          select: { phases: true, teams: true, matches: true },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 5,
+    }),
+    prisma.competition.count({ where: { status: "ACTIVE" } }),
+    prisma.roomMember.count(),
+    prisma.competitionMatch.findMany({
+      where: {
+        kickoffAt: { gte: new Date() },
+      },
+      include: {
+        competition: true,
+        phase: true,
+        homeTeam: true,
+        awayTeam: true,
+      },
+      orderBy: { kickoffAt: "asc" },
+      take: 6,
+    }),
   ]);
-
-  const finished = matches.filter((match) => match.status === "FINISHED").length;
-  const points = mine.reduce((sum, item) => sum + item.points, 0);
-  const nextMatch =
-    matches
-      .filter(
-        (match) =>
-          match.kickoffAt &&
-          match.kickoffAt > new Date() &&
-          match.status !== "FINISHED",
-      )
-      .sort((a, b) => a.kickoffAt!.getTime() - b.kickoffAt!.getTime())[0] ?? null;
 
   return (
     <div className="page">
       <header className="page-header">
         <div>
           <span className="eyebrow">Panel general</span>
-          <h1>Quiniela Mundial 2026</h1>
+          <h1>Centro de quinielas</h1>
         </div>
       </header>
 
-      {isManagerOnly ? (
-        <p className="admin-participant-note">
-          Cuenta administrador principal: gestionas usuarios y resultados, pero no participas en
-          la quiniela.
-        </p>
-      ) : null}
-
       <section className="metric-grid">
-        {isManagerOnly ? (
-          <Metric icon={<Shield size={20} />} label="Rol" value="Administrador" />
-        ) : (
-          <Metric icon={<Medal size={20} />} label="Mis puntos" value={points} />
-        )}
-        <Metric icon={<CheckCircle2 size={20} />} label="Partidos cerrados" value={`${finished}/104`} />
-        <Metric icon={<Users size={20} />} label="Participantes" value={participantCount} />
-        <NextMatchMetric match={nextMatch} />
+        <Metric icon={<Users size={20} />} label="Salas activas" value={roomsCount} />
+        <Metric icon={<Trophy size={20} />} label="Competiciones" value={competitions.length} />
+        <Metric icon={<Layers3 size={20} />} label="Competiciones activas" value={activeCompetitions} />
+        <Metric icon={<CalendarDays size={20} />} label="Miembros en salas" value={membersCount} />
       </section>
 
       <section className="two-column">
         <div className="panel">
           <div className="panel-head">
-            <h2>Estado del fixture</h2>
+            <h2>Mis salas</h2>
+            <Link className="table-link" href="/rooms">
+              Ver todas
+            </Link>
           </div>
-          <div className="stage-list">
-            {Object.entries(stageLabels).map(([stage, label]) => {
-              const stageMatches = matches.filter((match) => match.stage === stage);
-              const done = stageMatches.filter((match) => match.status === "FINISHED").length;
-              return (
-                <div className="stage-row" key={stage}>
-                  <span>{label}</span>
-                  <strong>
-                    {done}/{stageMatches.length}
-                  </strong>
-                </div>
-              );
-            })}
+          <div className="dashboard-list">
+            {myRooms.length === 0 ? (
+              <p className="muted empty-inline">Todavia no perteneces a ninguna sala.</p>
+            ) : (
+              myRooms.map(({ room, role }) => (
+                <Link className="dashboard-list-row" href={`/rooms/${room.id}`} key={room.id}>
+                  <div>
+                    <strong>{room.name}</strong>
+                    <span>{room.tournamentName}</span>
+                  </div>
+                  <small>
+                    {role} · {room.members.length} miembros
+                  </small>
+                </Link>
+              ))
+            )}
           </div>
         </div>
-        <QuinielaRulesPanel rules={scoringRules} />
+
+        <div className="panel">
+          <div className="panel-head">
+            <h2>Próximos partidos</h2>
+            <Link className="table-link" href="/calendar">
+              Calendario
+            </Link>
+          </div>
+          <div className="dashboard-list">
+            {upcomingMatches.length === 0 ? (
+              <p className="muted empty-inline">No hay partidos próximos registrados.</p>
+            ) : (
+              upcomingMatches.map((match) => (
+                <div className="dashboard-list-row" key={match.id}>
+                  <div>
+                    <strong>
+                      {match.homeTeam?.name ?? match.homePlaceholder ?? "Local"} vs{" "}
+                      {match.awayTeam?.name ?? match.awayPlaceholder ?? "Visitante"}
+                    </strong>
+                    <span>
+                      {match.competition.name}
+                      {match.phase ? ` · ${match.phase.name}` : ""}
+                    </span>
+                  </div>
+                  <small>{match.kickoffAt ? formatAppDateTime(match.kickoffAt) : "Sin fecha"}</small>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="panel-head">
+          <h2>Competiciones recientes</h2>
+          <span>{competitions.length} visibles</span>
+        </div>
+        <div className="competition-summary-grid">
+          {competitions.length === 0 ? (
+            <p className="muted empty-inline">Registra competiciones desde Admin para poblar el calendario.</p>
+          ) : (
+            competitions.map((competition) => (
+              <Link
+                className="competition-summary-card"
+                href={`/calendar?competition=${competition.id}`}
+                key={competition.id}
+              >
+                <span>{tournamentTypeLabels[competition.type]}</span>
+                <strong>{competition.name}</strong>
+                <small>
+                  {competition._count.phases} fases · {competition._count.teams} equipos ·{" "}
+                  {competition._count.matches} partidos
+                </small>
+              </Link>
+            ))
+          )}
+        </div>
       </section>
     </div>
   );

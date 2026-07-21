@@ -1,3 +1,5 @@
+import teamLogos from "./team-logos.json";
+
 const teamFlagCodes: Record<string, string> = {
   ALEMANIA: "de",
   GERMANY: "de",
@@ -96,6 +98,10 @@ export function normalizeTeamName(name: string) {
 
 export function flagUrlForTeam(name?: string | null) {
   if (!name) return null;
-  const code = teamFlagCodes[normalizeTeamName(name)];
+  const normalized = normalizeTeamName(name);
+  const customLogo = (teamLogos as Record<string, string>)[normalized];
+  if (customLogo) return customLogo;
+
+  const code = teamFlagCodes[normalized];
   return code ? `https://flagcdn.com/${code}.svg` : null;
 }

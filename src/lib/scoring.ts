@@ -1,8 +1,25 @@
-import type { Match, Prediction } from "@prisma/client";
 import type { ScoringRules } from "@/lib/scoring-settings";
 import { defaultScoringRules } from "@/lib/scoring-settings";
 
+type BaseMarket = "EXACT_SCORE" | "MATCH_OUTCOME" | "ADVANCING_TEAM";
+
 type Outcome = "HOME" | "AWAY" | "DRAW";
+
+type ScorableMatch = {
+  stage: "GROUP" | "ROUND_OF_32" | "ROUND_OF_16" | "QUARTER_FINAL" | "SEMIFINAL" | "THIRD_PLACE" | "FINAL";
+  homeScore: number | null;
+  awayScore: number | null;
+  status: "SCHEDULED" | "LIVE" | "FINISHED";
+  actualWinnerSide: "HOME" | "AWAY" | null;
+  actualWinnerTeamId: string | null;
+};
+
+type ScorablePrediction = {
+  predictedHomeScore: number | null;
+  predictedAwayScore: number | null;
+  predictedWinnerSide: "HOME" | "AWAY" | null;
+  predictedWinnerTeamId: string | null;
+};
 
 function matchOutcome(home: number, away: number): Outcome {
   if (home === away) return "DRAW";
@@ -10,8 +27,8 @@ function matchOutcome(home: number, away: number): Outcome {
 }
 
 function exactScore(
-  match: Pick<Match, "homeScore" | "awayScore">,
-  prediction: Pick<Prediction, "predictedHomeScore" | "predictedAwayScore">,
+  match: Pick<ScorableMatch, "homeScore" | "awayScore">,
+  prediction: Pick<ScorablePrediction, "predictedHomeScore" | "predictedAwayScore">,
 ) {
   return (
     match.homeScore === prediction.predictedHomeScore &&
@@ -21,8 +38,8 @@ function exactScore(
 
 /** Acierta ganador local, visitante o empate aunque el marcador no sea exacto. */
 function sameOutcome(
-  match: Pick<Match, "homeScore" | "awayScore">,
-  prediction: Pick<Prediction, "predictedHomeScore" | "predictedAwayScore">,
+  match: Pick<ScorableMatch, "homeScore" | "awayScore">,
+  prediction: Pick<ScorablePrediction, "predictedHomeScore" | "predictedAwayScore">,
 ) {
   if (
     match.homeScore === null ||
@@ -38,8 +55,8 @@ function sameOutcome(
 }
 
 function sameWinner(
-  match: Pick<Match, "actualWinnerSide" | "actualWinnerTeamId">,
-  prediction: Pick<Prediction, "predictedWinnerSide" | "predictedWinnerTeamId">,
+  match: Pick<ScorableMatch, "actualWinnerSide" | "actualWinnerTeamId">,
+  prediction: Pick<ScorablePrediction, "predictedWinnerSide" | "predictedWinnerTeamId">,
 ) {
   if (
     prediction.predictedWinnerTeamId &&
@@ -57,23 +74,14 @@ function sameWinner(
 }
 
 export function scorePrediction(
-  match: Pick<
-    Match,
-    | "stage"
-    | "homeScore"
-    | "awayScore"
-    | "status"
-    | "actualWinnerSide"
-    | "actualWinnerTeamId"
-  >,
-  prediction: Pick<
-    Prediction,
-    | "predictedHomeScore"
-    | "predictedAwayScore"
-    | "predictedWinnerSide"
-    | "predictedWinnerTeamId"
-  >,
+  match: ScorableMatch,
+  prediction: ScorablePrediction,
   rules: ScoringRules = defaultScoringRules,
+  enabledMarkets: ReadonlySet<string> = new Set<BaseMarket>([
+    "EXACT_SCORE",
+    "MATCH_OUTCOME",
+    "ADVANCING_TEAM",
+  ]),
 ) {
   if (match.status !== "FINISHED") return 0;
 
@@ -87,11 +95,11 @@ export function scorePrediction(
       return 0;
     }
 
-    if (exactScore(match, prediction)) {
+    if (enabledMarkets.has("EXACT_SCORE") && exactScore(match, prediction)) {
       return rules.groupExactPoints;
     }
 
-    if (sameOutcome(match, prediction)) {
+    if (enabledMarkets.has("MATCH_OUTCOME") && sameOutcome(match, prediction)) {
       return rules.groupOutcomePoints;
     }
 
@@ -103,12 +111,13 @@ export function scorePrediction(
     match.awayScore !== null &&
     prediction.predictedHomeScore !== null &&
     prediction.predictedAwayScore !== null &&
+    enabledMarkets.has("EXACT_SCORE") &&
     exactScore(match, prediction)
   ) {
     return rules.groupExactPoints;
   }
 
-  if (!sameWinner(match, prediction)) {
+  if (!enabledMarkets.has("ADVANCING_TEAM") || !sameWinner(match, prediction)) {
     return 0;
   }
 

@@ -10,13 +10,13 @@ export default function RegisterPage({
   return (
     <section className="login-wrap">
       <div className="login-panel">
-        <div className="login-head">
-          <span className="brand-mark">
-            <UserPlus size={22} />
+        <div className="login-head" style={{ display: "flex", alignItems: "center", gap: "14px", marginBottom: "20px" }}>
+          <span className="brand-mark" style={{ border: "none", background: "transparent", padding: 0, width: "48px", height: "48px", flexShrink: 0 }}>
+            <img src="/logo-previa-shield.png" alt="Previa Logo" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
           </span>
           <div>
-            <h1>Registro</h1>
-            <p>Crear participante</p>
+            <h1 style={{ fontSize: "1.45rem", fontWeight: 850 }}>Registro</h1>
+            <p style={{ color: "var(--muted)", fontSize: "0.88rem", margin: "2px 0 0" }}>Crear participante</p>
           </div>
         </div>
         <form action={registerAction} className="stack-form">
