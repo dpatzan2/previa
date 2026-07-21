@@ -3,7 +3,7 @@ export const SESSION_COOKIE_NAME = "mundial_session";
 export const PUBLIC_PATHS = new Set(["/login", "/register"]);
 
 export function isPublicPath(pathname: string) {
-  return PUBLIC_PATHS.has(pathname);
+  return PUBLIC_PATHS.has(pathname) || pathname.startsWith("/api/calendar/");
 }
 
 export function safeRedirectPath(path: string | null | undefined) {
