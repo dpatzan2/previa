@@ -1,8 +1,10 @@
 import Link from "next/link";
-import { BarChart3, CalendarDays, Clock3, MapPin } from "lucide-react";
+import { BarChart3, CalendarDays, Clock3, MapPin, Trophy } from "lucide-react";
+import { BracketView } from "@/components/BracketView";
 import { CalendarSyncButtons } from "@/components/CalendarSyncButtons";
 import { TeamLabel } from "@/components/TeamLabel";
 import { requireUser } from "@/lib/auth";
+import { buildBracket } from "@/lib/bracket";
 import {
   calculateBestThirds,
   calculateStandings,
@@ -43,7 +45,9 @@ export default async function CalendarPage({
     orderBy: [{ startsAt: "desc" }, { name: "asc" }],
   });
   const selected = competitions.find((competition) => competition.id === query.competition) ?? competitions[0] ?? null;
-  const view = query.view === "standings" ? "standings" : "fixture";
+  const bracket = selected ? buildBracket(selected.phases) : null;
+  const view =
+    query.view === "standings" || (query.view === "bracket" && bracket) ? query.view : "fixture";
 
   if (!selected) {
     return (
@@ -92,9 +96,16 @@ export default async function CalendarPage({
         <Link className={view === "standings" ? "active" : ""} href={`/calendar?competition=${selected.id}&view=standings`}>
           <BarChart3 size={17} />Posiciones
         </Link>
+        {bracket ? (
+          <Link className={view === "bracket" ? "active" : ""} href={`/calendar?competition=${selected.id}&view=bracket`}>
+            <Trophy size={17} />Eliminatoria
+          </Link>
+        ) : null}
       </nav>
 
-      {view === "fixture" ? <FixtureView matches={selected.matches} /> : <StandingsView competition={selected} />}
+      {view === "fixture" ? <FixtureView matches={selected.matches} /> : null}
+      {view === "standings" ? <StandingsView competition={selected} /> : null}
+      {view === "bracket" && bracket ? <BracketView bracket={bracket} /> : null}
     </div>
   );
 }
