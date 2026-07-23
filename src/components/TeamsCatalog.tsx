@@ -91,14 +91,9 @@ export function TeamsCatalog({ teams, competitions }: TeamsCatalogProps) {
 
             return (
               <div
-                className="admin-item-row"
+                className={isEditing ? "admin-item-row editing" : "admin-item-row"}
                 key={team.id}
-                style={{
-                  minHeight: "64px",
-                  padding: "12px 18px",
-                  border: isEditing ? "1px solid var(--primary)" : "1px solid var(--line)",
-                  background: isEditing ? "#f8faf8" : "#fff",
-                }}
+                style={{ minHeight: "64px", padding: "12px 18px" }}
               >
                 {isEditing ? (
                   <form
@@ -196,7 +191,7 @@ export function TeamsCatalog({ teams, competitions }: TeamsCatalogProps) {
                             ))}
                           </div>
                         ) : (
-                          <span style={{ fontSize: "0.72rem", color: "#b07c2a", fontStyle: "italic", marginTop: "4px" }}>
+                          <span style={{ fontSize: "0.72rem", color: "var(--accent)", fontStyle: "italic", marginTop: "4px" }}>
                             Sin competencia asociada
                           </span>
                         )}

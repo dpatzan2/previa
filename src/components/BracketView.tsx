@@ -19,12 +19,14 @@ export function BracketView({ bracket }: { bracket: Bracket }) {
           <span className="bracket-round">{bracket.rounds.at(-1)}</span>
           <span className="bracket-trophy"><Trophy size={26} /></span>
           <MatchCard match={bracket.final.match} champion />
-          {bracket.thirdPlace ? (
-            <>
-              <span className="bracket-round third">{bracket.thirdPlace.round}</span>
-              <MatchCard match={bracket.thirdPlace.match} />
-            </>
-          ) : null}
+          {bracket.sides.map((side) => (
+            <div className="bracket-side-branch" key={side.round}>
+              <span className="bracket-round third">{side.round}</span>
+              {side.matches.map((match) => (
+                <MatchCard match={match} key={match.id} />
+              ))}
+            </div>
+          ))}
         </div>
 
         <BracketSide columns={right} roundNames={roundNames} mirrored />
@@ -75,17 +77,18 @@ function pairs(matches: BracketMatch[]) {
 
 function MatchCard({ match, champion = false }: { match: BracketMatch; champion?: boolean }) {
   const winner = winnerSide(match);
+  const footer = match.twoLegged
+    ? "Global · ida y vuelta"
+    : match.status === "LIVE"
+      ? "En vivo"
+      : match.kickoffAt
+        ? formatAppDate(match.kickoffAt)
+        : "Fecha por definir";
   return (
     <article className={champion ? "bracket-card champion" : "bracket-card"}>
       <BracketTeamRow match={match} side="HOME" winner={winner} />
       <BracketTeamRow match={match} side="AWAY" winner={winner} />
-      <small>
-        {match.status === "LIVE"
-          ? "En vivo"
-          : match.kickoffAt
-            ? formatAppDate(match.kickoffAt)
-            : "Fecha por definir"}
-      </small>
+      <small>{footer}</small>
     </article>
   );
 }

@@ -15,6 +15,9 @@ test("shared room and scoreboard surfaces use theme tokens", () => {
     ".phase-tab,",
     ".points-pill {",
     ".room-market-summary span",
+    ".admin-item-row {",
+    ".admin-item-row:hover",
+    ".admin-item-row.editing",
   ]) {
     const start = css.indexOf(selector);
     assert.notEqual(start, -1, `${selector} must exist`);

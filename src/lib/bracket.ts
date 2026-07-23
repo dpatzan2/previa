@@ -16,12 +16,15 @@ export type BracketMatch = {
   awayPlaceholder: string | null;
   homeTeam: BracketTeam | null;
   awayTeam: BracketTeam | null;
+  /** La llave se jugo a ida y vuelta y el marcador mostrado es el global. */
+  twoLegged?: boolean;
 };
 
 export type BracketPhase = {
   id: string;
   name: string;
   format: "GROUP" | "KNOCKOUT" | "LEAGUE";
+  stage?: string | null;
   sortOrder: number;
   matches: BracketMatch[];
 };
@@ -35,7 +38,8 @@ export type BracketNode = {
 export type Bracket = {
   rounds: string[];
   final: BracketNode;
-  thirdPlace: { match: BracketMatch; round: string } | null;
+  /** Ramas fuera del camino a la final: tercer puesto, play-in de perdedores, etc. */
+  sides: { round: string; matches: BracketMatch[] }[];
 };
 
 function byMatchNumber(a: BracketMatch, b: BracketMatch) {
@@ -55,47 +59,122 @@ function feederForTeam(team: BracketTeam | null, previous: BracketMatch[], used:
   );
 }
 
+/**
+ * Los cruces sin equipos aun suelen venir descritos ("Ganador CF1"): el numero final
+ * es la posicion de la llave dentro de la ronda anterior.
+ */
+function feederForPlaceholder(placeholder: string | null, previous: BracketMatch[], used: Set<string>) {
+  if (!placeholder || !/ganador/i.test(placeholder)) return null;
+  const index = Number(placeholder.match(/(\d+)\s*$/)?.[1]);
+  const feeder = previous[index - 1];
+  return feeder && !used.has(feeder.id) ? feeder : null;
+}
+
 function linkRound(current: BracketMatch[], previous: BracketMatch[]) {
   const used = new Set<string>();
-  const links = new Map<string, BracketMatch[]>();
+  const bySlot = new Map<string, BracketMatch>();
+  const slots = current.flatMap((match) => [
+    { key: `${match.id}:H`, team: match.homeTeam, placeholder: match.homePlaceholder },
+    { key: `${match.id}:A`, team: match.awayTeam, placeholder: match.awayPlaceholder },
+  ]);
 
-  for (const match of current) {
-    const feeders: BracketMatch[] = [];
-    for (const team of [match.homeTeam, match.awayTeam]) {
-      const feeder = feederForTeam(team, previous, used);
-      if (feeder) {
-        used.add(feeder.id);
-        feeders.push(feeder);
-      }
+  // El equipo real manda sobre la descripcion, asi que se resuelve en dos pasadas.
+  const resolvers = [
+    (slot: (typeof slots)[number]) => feederForTeam(slot.team, previous, used),
+    (slot: (typeof slots)[number]) => feederForPlaceholder(slot.placeholder, previous, used),
+  ];
+  for (const resolve of resolvers) {
+    for (const slot of slots) {
+      if (bySlot.has(slot.key)) continue;
+      const feeder = resolve(slot);
+      if (!feeder) continue;
+      used.add(feeder.id);
+      bySlot.set(slot.key, feeder);
     }
-    links.set(match.id, feeders);
   }
 
-  // ponytail: fallback secuencial para los partidos que no se pudieron resolver por
-  // equipo (rondas futuras). Reparte los alimentadores sobrantes en orden.
+  // ponytail: fallback secuencial para los cruces que no se pudieron resolver.
+  // Reparte los alimentadores sobrantes en orden.
   const leftovers = previous.filter((match) => !used.has(match.id));
+  const links = new Map<string, BracketMatch[]>();
   for (const match of current) {
-    const feeders = links.get(match.id)!;
-    while (feeders.length < 2 && leftovers.length > 0) {
-      feeders.push(leftovers.shift()!);
-    }
-    feeders.sort(byMatchNumber);
+    links.set(
+      match.id,
+      [`${match.id}:H`, `${match.id}:A`]
+        .map((key) => bySlot.get(key) ?? leftovers.shift())
+        .filter((feeder): feeder is BracketMatch => Boolean(feeder)),
+    );
   }
 
   return links;
+}
+
+function slotKey(match: BracketMatch, side: "HOME" | "AWAY") {
+  return side === "HOME"
+    ? match.homeTeam?.id ?? match.homePlaceholder
+    : match.awayTeam?.id ?? match.awayPlaceholder;
+}
+
+/** La vuelta es el mismo cruce con los locales invertidos. */
+function isReturnLeg(first: BracketMatch, second: BracketMatch) {
+  const home = slotKey(first, "HOME");
+  const away = slotKey(first, "AWAY");
+  if (!home || !away || home === away) return false;
+  return home === slotKey(second, "AWAY") && away === slotKey(second, "HOME");
+}
+
+function addScores(a: number | null, b: number | null) {
+  return a === null || b === null ? null : a + b;
+}
+
+function mergeLegs(first: BracketMatch, second: BracketMatch): BracketMatch {
+  const live = first.status === "LIVE" || second.status === "LIVE";
+  const finished = first.status === "FINISHED" && second.status === "FINISHED";
+  return {
+    ...first,
+    status: live ? "LIVE" : finished ? "FINISHED" : "SCHEDULED",
+    homeScore: addScores(first.homeScore, second.awayScore),
+    awayScore: addScores(first.awayScore, second.homeScore),
+    // El ganador de la llave se define en la vuelta, con los lados invertidos.
+    actualWinnerSide: second.actualWinnerSide === "HOME" ? "AWAY" : second.actualWinnerSide === "AWAY" ? "HOME" : null,
+    twoLegged: true,
+  };
+}
+
+/** Convierte los partidos de una fase en llaves: la ida y la vuelta cuentan como una. */
+function toTies(matches: BracketMatch[]): BracketMatch[] {
+  const used = new Set<string>();
+  const ties: BracketMatch[] = [];
+  for (const first of matches) {
+    if (used.has(first.id)) continue;
+    used.add(first.id);
+    const second = matches.find((other) => !used.has(other.id) && isReturnLeg(first, other));
+    if (second) used.add(second.id);
+    ties.push(second ? mergeLegs(first, second) : first);
+  }
+  return ties;
+}
+
+/**
+ * Ramas que no llevan a la final. El tercer puesto viene marcado en la fase; el play-in
+ * de perdedores solo se reconoce por como estan descritos sus cruces.
+ */
+function isSideBranch(phase: BracketPhase) {
+  if (phase.stage === "THIRD_PLACE" || /tercer|3\.?er|consolaci/i.test(phase.name)) return true;
+  return phase.matches.every(
+    (match) => /^perdedor/i.test(match.homePlaceholder ?? "") && /^perdedor/i.test(match.awayPlaceholder ?? ""),
+  );
 }
 
 export function buildBracket(phases: BracketPhase[]): Bracket | null {
   const knockout = phases
     .filter((phase) => phase.format === "KNOCKOUT" && phase.matches.length > 0)
     .sort((a, b) => a.sortOrder - b.sortOrder)
-    .map((phase) => ({ ...phase, matches: [...phase.matches].sort(byMatchNumber) }));
+    .map((phase) => ({ ...phase, matches: toTies([...phase.matches].sort(byMatchNumber)) }));
 
-  const finalPhase = knockout.at(-1);
+  const rounds = knockout.filter((phase) => !isSideBranch(phase));
+  const finalPhase = rounds.at(-1);
   if (!finalPhase || finalPhase.matches.length !== 1) return null;
-
-  const thirdPlacePhase = knockout.slice(0, -1).find((phase) => phase.matches.length === 1);
-  const rounds = knockout.filter((phase) => phase !== thirdPlacePhase);
 
   const links = new Map<string, BracketMatch[]>();
   for (let index = 1; index < rounds.length; index += 1) {
@@ -117,10 +196,10 @@ export function buildBracket(phases: BracketPhase[]): Bracket | null {
 
   return {
     rounds: rounds.map((round) => round.name),
-    final: toNode(rounds.at(-1)!.matches[0]),
-    thirdPlace: thirdPlacePhase
-      ? { match: thirdPlacePhase.matches[0], round: thirdPlacePhase.name }
-      : null,
+    final: toNode(finalPhase.matches[0]),
+    sides: knockout
+      .filter((phase) => isSideBranch(phase))
+      .map((phase) => ({ round: phase.name, matches: phase.matches })),
   };
 }
 
