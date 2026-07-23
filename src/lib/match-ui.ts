@@ -1,7 +1,8 @@
 import type { MatchStage } from "@prisma/client";
 import type { FormResult } from "@/lib/competition-insights";
 
-import { matchScheduleLabels } from "@/lib/timezone";
+import { stageOrder } from "@/lib/stages";
+import { formatAppDateKey, matchScheduleLabels } from "@/lib/timezone";
 
 export type DisplayMatch = {
   id: string;
@@ -10,6 +11,8 @@ export type DisplayMatch = {
   groupCode: string | null;
   dateLabel: string | null;
   timeLabel: string | null;
+  kickoffAt: Date | null;
+  dateKey: string | null;
   venue: string | null;
   venueShort: string | null;
   locked: boolean;
@@ -87,5 +90,65 @@ export function withGuatemalaSchedule<
     match.dateLabel,
     match.timeLabel,
   );
-  return { ...match, ...schedule };
+  const dateKey = match.kickoffAt ? formatAppDateKey(match.kickoffAt) : null;
+  return { ...match, ...schedule, dateKey };
+}
+
+export const TBD_DATE_KEY = "TBD";
+
+export type MatchDateTab = {
+  dateKey: string;
+  kickoffAt: Date | null;
+};
+
+/** Fechas distintas (en orden de aparicion) entre los partidos dados; los partidos sin fecha van al final. */
+export function collectDateTabs(matches: DisplayMatch[]): MatchDateTab[] {
+  const tabs: MatchDateTab[] = [];
+  const seen = new Set<string>();
+  let hasTbd = false;
+
+  for (const match of matches) {
+    if (!match.dateKey) {
+      hasTbd = true;
+      continue;
+    }
+    if (seen.has(match.dateKey)) continue;
+    seen.add(match.dateKey);
+    tabs.push({ dateKey: match.dateKey, kickoffAt: match.kickoffAt });
+  }
+
+  if (hasTbd) {
+    tabs.push({ dateKey: TBD_DATE_KEY, kickoffAt: null });
+  }
+
+  return tabs;
+}
+
+export type PhaseMatchGroup = {
+  key: string;
+  stage: MatchStage;
+  groupCode: string | null;
+  matches: DisplayMatch[];
+};
+
+/** Agrupa partidos por fase (y por grupo dentro de la fase de grupos), en orden de fase y luego de grupo. */
+export function groupMatchesByPhase(matches: DisplayMatch[]): PhaseMatchGroup[] {
+  const groups = new Map<string, PhaseMatchGroup>();
+
+  for (const match of matches) {
+    const groupCode = match.stage === "GROUP" ? match.groupCode : null;
+    const key = `${match.stage}:${groupCode ?? ""}`;
+    const existing = groups.get(key);
+    if (existing) {
+      existing.matches.push(match);
+    } else {
+      groups.set(key, { key, stage: match.stage, groupCode, matches: [match] });
+    }
+  }
+
+  return Array.from(groups.values()).sort((a, b) => {
+    const stageDiff = stageOrder.indexOf(a.stage) - stageOrder.indexOf(b.stage);
+    if (stageDiff !== 0) return stageDiff;
+    return (a.groupCode ?? "").localeCompare(b.groupCode ?? "");
+  });
 }

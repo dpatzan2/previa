@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Trophy } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { requireRoomMembership } from "@/lib/rooms";
@@ -30,6 +30,9 @@ export default async function RoomLeaderboardPage({
     points: entry.totalPoints,
   }));
 
+  const podiumRows = rows.slice(0, 3);
+  const restRows = rows.slice(3);
+
   return (
     <div className="page">
       <Link className="back-link" href="/rooms">
@@ -44,32 +47,62 @@ export default async function RoomLeaderboardPage({
         canManage={canManage}
       />
 
-      <div className="panel">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Participante</th>
-              <th>Rol</th>
-              <th>Pronosticos</th>
-              <th>Puntos</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row, index) => (
-              <tr key={row.id}>
-                <td>{index + 1}</td>
-                <td>{row.name}</td>
-                <td>{row.role}</td>
-                <td>{row.predictions}</td>
-                <td>
-                  <strong>{row.points}</strong>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {rows.length === 0 ? (
+        <section className="panel empty-state-panel">
+          <h2>Todavia no hay pronosticos puntuados</h2>
+          <p>La tabla aparecera aqui en cuanto haya resultados.</p>
+        </section>
+      ) : (
+        <>
+          <div className="podium">
+            {podiumRows.map((row, index) => {
+              const place = index + 1;
+              return (
+                <div key={row.id} className={`podium-place podium-place-${place}`}>
+                  <div className="podium-card">
+                    {place === 1 && <Trophy className="podium-trophy" size={20} />}
+                    <strong className="podium-name">{row.name}</strong>
+                    <span className="podium-meta">{row.predictions} pronosticos</span>
+                    <span className="podium-points">{row.points} pts</span>
+                  </div>
+                  <div className="podium-block">
+                    <span className="podium-rank">{place}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {restRows.length > 0 && (
+            <div className="panel">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Participante</th>
+                    <th>Rol</th>
+                    <th>Pronosticos</th>
+                    <th>Puntos</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {restRows.map((row, index) => (
+                    <tr key={row.id}>
+                      <td>{index + 4}</td>
+                      <td>{row.name}</td>
+                      <td>{row.role}</td>
+                      <td>{row.predictions}</td>
+                      <td>
+                        <strong>{row.points}</strong>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

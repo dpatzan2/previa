@@ -23,7 +23,6 @@ import {
 } from "@/lib/phase-deadlines";
 import { bonusMarketsFor, parseEnabledMarkets, type RoomMarketKey } from "@/lib/room-presets";
 import { requireRoomMembership } from "@/lib/rooms";
-import { stageOrder } from "@/lib/stages";
 import { formatAppDateTime } from "@/lib/timezone";
 
 function stageFor(phase: { stage: MatchStage | null; format: string } | null): MatchStage {
@@ -240,8 +239,6 @@ export default async function RoomPicksPage({
     });
   });
 
-  const groupCodes = [...new Set(displayMatches.filter((match) => match.stage === "GROUP").map((match) => match.groupCode).filter(Boolean))].sort() as string[];
-  const stages = stageOrder.filter((stage) => displayMatches.some((match) => match.stage === stage));
   const championDeadline = championPickDeadlineAt(competition.matches, room.deadlineHoursBefore);
 
   return (
@@ -255,8 +252,6 @@ export default async function RoomPicksPage({
         predictions={predictionMap}
         peersByMatch={peersByMatch}
         popularPredictions={popularPredictions}
-        groupCodes={groupCodes}
-        stages={stages}
         phaseDeadlines={serializePhaseDeadlines(phaseDeadlines)}
         roomMarkets={roomMarkets}
         marketAnswers={marketAnswers}

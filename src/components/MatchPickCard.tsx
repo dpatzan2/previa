@@ -46,21 +46,13 @@ export function MatchPickCard({
   hidden?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-
-  if (hidden) {
-    return (
-      <div className="match-pick-card is-hidden" aria-hidden="true">
-        {match.stage === "GROUP" ? (
-          <GroupMatchScoreboard match={match} prediction={prediction} />
-        ) : (
-          <KnockoutMatchScoreboard match={match} prediction={prediction} />
-        )}
-      </div>
-    );
-  }
+  const showPeerPanel = open && peerPicksVisible && !hidden;
 
   return (
-    <div className={`match-pick-card${open ? " open" : ""}`}>
+    <div
+      className={`match-pick-card${showPeerPanel ? " open" : ""}${hidden ? " is-hidden" : ""}`}
+      aria-hidden={hidden}
+    >
       <div className="match-pick-row">
         <div className="match-pick-main">
           {match.stage === "GROUP" ? (
@@ -72,9 +64,10 @@ export function MatchPickCard({
         <button
           type="button"
           className={`peer-toggle${peerPicksVisible ? "" : " locked"}`}
-          aria-expanded={open}
+          aria-expanded={showPeerPanel}
           aria-disabled={!peerPicksVisible}
-          disabled={!peerPicksVisible}
+          disabled={!peerPicksVisible || hidden}
+          tabIndex={hidden ? -1 : undefined}
           aria-label={
             peerPicksVisible
               ? `Ver pronosticos de otros participantes, partido ${match.matchNumber}`
@@ -86,7 +79,7 @@ export function MatchPickCard({
               : `Disponible cuando cierre el partido${phaseStartsLabel ? ` de la fase iniciada el ${phaseStartsLabel} GT` : ""}`
           }
           onClick={() => {
-            if (!peerPicksVisible) return;
+            if (!peerPicksVisible || hidden) return;
             setOpen((value) => !value);
           }}
         >
@@ -101,7 +94,7 @@ export function MatchPickCard({
         </button>
       </div>
 
-      {open && peerPicksVisible ? (
+      {showPeerPanel ? (
         <div className="peer-picks-panel">
           <div className="peer-picks-head">
             <strong>Pronosticos del grupo</strong>
