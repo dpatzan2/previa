@@ -22,7 +22,7 @@ import path from "path";
 import { signIn, signOut, requireAdmin, requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { canParticipateInPool } from "@/lib/participants";
-import { championPickDeadlineAt, computePhaseDeadlines, isMatchLockedForPicks, roomDeadlineConfig } from "@/lib/phase-deadlines";
+import { championPickDeadlineAt, computePhaseDeadlines, DEVELOPMENT_PHASE_UNLOCKS, isMatchLockedForPicks, roomDeadlineConfig } from "@/lib/phase-deadlines";
 import { SCORING_SETTINGS_ID } from "@/lib/scoring-settings";
 import { syncWc2026Matches } from "@/lib/wc2026";
 import type { ActionFeedbackState } from "@/lib/form-action-state";
@@ -1491,7 +1491,7 @@ export async function saveRoomPredictionsAction(
     const championTeamId = String(formData.get("championTeamId") ?? "").trim();
     const championDeadline = championPickDeadlineAt(matches, room.deadlineHoursBefore);
     const championOpen =
-      process.env.NODE_ENV === "development" ||
+      DEVELOPMENT_PHASE_UNLOCKS ||
       !championDeadline ||
       new Date() < championDeadline;
     const validChampion = room.competition.teams.some((team) => team.id === championTeamId);
