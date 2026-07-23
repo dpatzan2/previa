@@ -979,10 +979,10 @@ h2 {
   width: 28px;
   height: 20px;
   flex: 0 0 28px;
-  border: 1px solid #d7ddd8;
+  border: 1px solid var(--line);
   border-radius: 3px;
   object-fit: contain;
-  background: #eef1ee;
+  background: var(--panel-soft);
 }
 
 img.team-flag {
@@ -2647,12 +2647,17 @@ input:disabled {
   gap: 14px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: #fff;
+  background: var(--panel);
   transition: background 140ms ease;
 }
 
 .admin-item-row:hover {
-  background: #f8faf7;
+  background: var(--panel-soft);
+}
+
+.admin-item-row.editing {
+  border-color: var(--primary);
+  background: var(--panel-soft);
 }
 
 .admin-item-info {
@@ -3822,14 +3827,6 @@ input:disabled {
   color: #fff;
 }
 
-.dark .admin-item-row {
-  background: var(--panel);
-  border-color: var(--line);
-}
-
-.dark .admin-item-row:hover {
-  background: var(--panel-soft);
-}
 
 .dark .admin-item-info strong {
   color: var(--ink);
@@ -4518,6 +4515,13 @@ input:disabled {
 }
 
 .bracket-round.third { margin-top: 18px; }
+
+.bracket-side-branch {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
 
 .bracket-card {
   width: 100%;
