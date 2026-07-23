@@ -124,6 +124,20 @@ export function collectDateTabs(matches: DisplayMatch[]): MatchDateTab[] {
   return tabs;
 }
 
+/** Fecha inicial de un carrusel: hoy si tiene partidos, si no la mas cercana. */
+export function defaultDateKey(tabs: MatchDateTab[], now = new Date()) {
+  const todayKey = formatAppDateKey(now);
+  if (tabs.some((tab) => tab.dateKey === todayKey)) return todayKey;
+
+  const nearest = tabs.reduce<{ key: string; diff: number } | null>((closest, tab) => {
+    if (!tab.kickoffAt) return closest;
+    const diff = Math.abs(tab.kickoffAt.getTime() - now.getTime());
+    return !closest || diff < closest.diff ? { key: tab.dateKey, diff } : closest;
+  }, null);
+
+  return nearest?.key ?? tabs[0]?.dateKey ?? TBD_DATE_KEY;
+}
+
 export type PhaseMatchGroup = {
   key: string;
   stage: MatchStage;

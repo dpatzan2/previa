@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { BarChart3, CalendarDays, Clock3, MapPin, Trophy } from "lucide-react";
+import { BarChart3, CalendarDays, Trophy } from "lucide-react";
 import { BracketView } from "@/components/BracketView";
 import { CalendarSyncButtons } from "@/components/CalendarSyncButtons";
+import { FixtureCalendar } from "@/components/FixtureCalendar";
 import { TeamLabel } from "@/components/TeamLabel";
 import { requireUser } from "@/lib/auth";
 import { buildBracket } from "@/lib/bracket";
@@ -13,7 +14,6 @@ import {
 } from "@/lib/competition-insights";
 import { prisma } from "@/lib/db";
 import { tournamentTypeLabels } from "@/lib/room-presets";
-import { formatAppDate, formatAppDateKey, formatAppTime } from "@/lib/timezone";
 
 const statusLabels = { DRAFT: "Borrador", ACTIVE: "Activa", ARCHIVED: "Archivada" };
 
@@ -103,67 +103,10 @@ export default async function CalendarPage({
         ) : null}
       </nav>
 
-      {view === "fixture" ? <FixtureView matches={selected.matches} /> : null}
+      {view === "fixture" ? <FixtureCalendar matches={selected.matches} /> : null}
       {view === "standings" ? <StandingsView competition={selected} /> : null}
       {view === "bracket" && bracket ? <BracketView bracket={bracket} /> : null}
     </div>
-  );
-}
-
-type CalendarMatch = {
-  id: string;
-  kickoffAt: Date | null;
-  venue: string | null;
-  status: "SCHEDULED" | "LIVE" | "FINISHED";
-  homeScore: number | null;
-  awayScore: number | null;
-  homePlaceholder: string | null;
-  awayPlaceholder: string | null;
-  homeTeam: { id: string; name: string; logoUrl: string | null } | null;
-  awayTeam: { id: string; name: string; logoUrl: string | null } | null;
-  phase: { name: string } | null;
-};
-
-function FixtureView({ matches }: { matches: CalendarMatch[] }) {
-  const dated = new Map<string, CalendarMatch[]>();
-  const unscheduled: CalendarMatch[] = [];
-  for (const match of matches) {
-    if (!match.kickoffAt) { unscheduled.push(match); continue; }
-    const key = formatAppDateKey(match.kickoffAt);
-    (dated.get(key) ?? dated.set(key, []).get(key)!).push(match);
-  }
-  if (matches.length === 0) return <section className="panel empty-state-panel"><h2>Sin partidos registrados</h2></section>;
-
-  return (
-    <div className="fixture-day-list">
-      {[...dated.entries()].map(([date, dayMatches]) => (
-        <section className="fixture-day panel" key={date}>
-          <header><h2>{formatAppDate(dayMatches[0].kickoffAt!)}</h2><span>{dayMatches.length} partidos</span></header>
-          <div>
-            {dayMatches.map((match) => <FixtureMatchRow match={match} key={match.id} />)}
-          </div>
-        </section>
-      ))}
-      {unscheduled.length ? (
-        <section className="fixture-day panel"><header><h2>Fecha por definir</h2></header><div>{unscheduled.map((match) => <FixtureMatchRow match={match} key={match.id} />)}</div></section>
-      ) : null}
-    </div>
-  );
-}
-
-function FixtureMatchRow({ match }: { match: CalendarMatch }) {
-  const home = match.homeTeam?.name ?? match.homePlaceholder ?? "Local";
-  const away = match.awayTeam?.name ?? match.awayPlaceholder ?? "Visitante";
-  return (
-    <article className={`fixture-match ${match.status.toLowerCase()}`}>
-      <div className="fixture-team home"><TeamLabel name={home} logoUrl={match.homeTeam?.logoUrl} /></div>
-      <div className="fixture-kickoff">
-        {match.status === "FINISHED" ? <strong>{match.homeScore} : {match.awayScore}</strong> : <strong>{match.kickoffAt ? formatAppTime(match.kickoffAt) : "Por definir"}</strong>}
-        <span>{match.status === "LIVE" ? "En vivo" : match.phase?.name ?? "Sin fase"}</span>
-      </div>
-      <div className="fixture-team away"><TeamLabel name={away} logoUrl={match.awayTeam?.logoUrl} /></div>
-      {match.venue ? <small><MapPin size={12} />{match.venue}</small> : <small><Clock3 size={12} />Hora Guatemala</small>}
-    </article>
   );
 }
 
