@@ -80,6 +80,58 @@ export function formatAppDateKey(date: Date) {
   }).format(date);
 }
 
+const WEEKDAY_SHORT_BY_EN: Record<string, string> = {
+  Sun: "DOM",
+  Mon: "LUN",
+  Tue: "MAR",
+  Wed: "MIE",
+  Thu: "JUE",
+  Fri: "VIE",
+  Sat: "SAB",
+};
+
+const MONTH_SHORT_BY_EN: Record<string, string> = {
+  Jan: "ENE",
+  Feb: "FEB",
+  Mar: "MAR",
+  Apr: "ABR",
+  May: "MAY",
+  Jun: "JUN",
+  Jul: "JUL",
+  Aug: "AGO",
+  Sep: "SEP",
+  Oct: "OCT",
+  Nov: "NOV",
+  Dec: "DIC",
+};
+
+export type CarouselDayParts = {
+  weekdayShort: string;
+  dayNumber: string;
+  monthShort: string;
+  isToday: boolean;
+};
+
+/** Partes cortas para el carrusel de fechas (LUN/23/JUL); evita depender de abreviaturas es-GT (varian por ICU). */
+export function formatCarouselDayParts(date: Date, now: Date = new Date()): CarouselDayParts {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: APP_TIMEZONE,
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  }).formatToParts(date);
+
+  const value = (type: "weekday" | "day" | "month") =>
+    parts.find((part) => part.type === type)?.value ?? "";
+
+  return {
+    weekdayShort: WEEKDAY_SHORT_BY_EN[value("weekday")] ?? value("weekday").toUpperCase(),
+    dayNumber: value("day"),
+    monthShort: MONTH_SHORT_BY_EN[value("month")] ?? value("month").toUpperCase(),
+    isToday: formatAppDateKey(date) === formatAppDateKey(now),
+  };
+}
+
 /** Etiquetas legibles desde kickoffAt; si no hay, usa las del fixture. */
 export function matchScheduleLabels(
   kickoffAt: Date | null | undefined,
