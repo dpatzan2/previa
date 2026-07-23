@@ -2970,6 +2970,11 @@ input:disabled {
   background: var(--panel-soft);
 }
 
+.admin-item-row.editing {
+  border-color: var(--primary);
+  background: var(--panel-soft);
+}
+
 .admin-item-info {
   min-width: 0;
   display: grid;
@@ -4078,14 +4083,6 @@ input:disabled {
   color: #fff;
 }
 
-.dark .admin-item-row {
-  background: var(--panel);
-  border-color: var(--line);
-}
-
-.dark .admin-item-row:hover {
-  background: var(--panel-soft);
-}
 
 .dark .admin-item-info strong {
   color: var(--ink);
@@ -4726,6 +4723,13 @@ input:disabled {
 }
 
 .bracket-round.third { margin-top: 18px; }
+
+.bracket-side-branch {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
 
 .bracket-card {
   width: 100%;

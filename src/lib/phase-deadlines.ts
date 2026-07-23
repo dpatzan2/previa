@@ -4,7 +4,9 @@ import { previousStageForUnlock, stageLabels } from "@/lib/stages";
 
 const MS_DAY = 24 * 60 * 60 * 1000;
 const MS_HOUR = 60 * 60 * 1000;
-const DEVELOPMENT_PHASE_UNLOCKS = process.env.NODE_ENV === "development";
+// ponytail: bypass explicito. Antes bastaba con `next dev` para abrir todas las fases,
+// asi que en local nunca se podia probar el limite real. Se activa con UNLOCK_PHASE_DEADLINES=1.
+export const DEVELOPMENT_PHASE_UNLOCKS = process.env.UNLOCK_PHASE_DEADLINES === "1";
 
 export type PickDeadlineMode = "LEGACY" | "PER_MATCH" | "PHASE";
 
