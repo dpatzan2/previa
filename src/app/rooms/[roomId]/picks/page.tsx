@@ -16,6 +16,7 @@ import {
   canViewPeerPredictionsForMatch,
   championPickDeadlineAt,
   computePhaseDeadlines,
+  DEVELOPMENT_PHASE_UNLOCKS,
   isMatchLockedForPicks,
   matchDeadlineAt,
   roomDeadlineConfig,
@@ -265,7 +266,7 @@ export default async function RoomPicksPage({
         deadlineHoursBefore={deadlineConfig.hoursBefore}
         championPick={{
           enabled: room.championPickEnabled,
-          locked: process.env.NODE_ENV !== "development" && Boolean(championDeadline && now >= championDeadline),
+          locked: !DEVELOPMENT_PHASE_UNLOCKS && Boolean(championDeadline && now >= championDeadline),
           deadlineLabel: championDeadline ? formatAppDateTime(championDeadline) : null,
           selectedTeamId: championPick?.predictedTeamId ?? null,
           points: room.championPickPoints,
