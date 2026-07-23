@@ -323,7 +323,7 @@ h2 {
 
 .stage-row:nth-child(odd),
 .leader-row:nth-child(odd) {
-  background: #f8faf7;
+  background: var(--panel-soft);
 }
 
 .leader-row {
@@ -565,7 +565,7 @@ h2 {
 .room-market-summary span {
   padding: 5px 8px;
   border-radius: 999px;
-  background: #eef5f1;
+  background: color-mix(in srgb, var(--primary) 12%, var(--panel));
   color: var(--primary-dark);
   font-size: 0.76rem;
   font-weight: 800;
@@ -944,7 +944,7 @@ h2 {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: #f8faf7;
+  background: var(--panel-soft);
   border-bottom: 1px solid var(--line);
 }
 
@@ -1329,7 +1329,7 @@ input:disabled {
   padding: 0 14px;
   border: 1px solid var(--line);
   border-radius: 999px;
-  background: #fff;
+  background: var(--panel);
   color: var(--muted);
   cursor: pointer;
   font-size: 0.88rem;
@@ -1377,7 +1377,7 @@ input:disabled {
 .phase-tab.active,
 .group-tab.active {
   border-color: var(--primary);
-  background: #eef5f1;
+  background: color-mix(in srgb, var(--primary) 12%, var(--panel));
   color: var(--primary-dark);
 }
 
@@ -1386,8 +1386,8 @@ input:disabled {
 .phase-tab.active.unavailable,
 .phase-tab.unavailable.active {
   border-color: #c8d2cb;
-  background: #f0f2f0;
-  color: #5f6761;
+  background: var(--panel-soft);
+  color: var(--muted);
 }
 
 .phase-deadline {
@@ -1456,7 +1456,7 @@ input:disabled {
 .match-pick-card {
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: #fff;
+  background: var(--panel);
   min-width: 0;
   max-width: 100%;
   overflow: hidden;
@@ -1690,7 +1690,7 @@ input:disabled {
   gap: 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: #fff;
+  background: var(--panel);
 }
 
 .peer-pick-name {
@@ -1873,7 +1873,7 @@ input:disabled {
 .scoreboard-card {
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: #fff;
+  background: var(--panel);
   min-width: 0;
   max-width: 100%;
   overflow: hidden;
@@ -1891,7 +1891,7 @@ input:disabled {
   justify-content: space-between;
   gap: 12px;
   border-bottom: 1px solid var(--line);
-  background: #f8faf7;
+  background: var(--panel-soft);
 }
 
 .scoreboard-meta {
@@ -1906,7 +1906,7 @@ input:disabled {
 .scoreboard-badge {
   padding: 3px 8px;
   border-radius: 999px;
-  background: #fff;
+  background: var(--panel);
   border: 1px solid var(--line);
   color: var(--ink);
   font-size: 0.78rem;
@@ -2011,7 +2011,7 @@ input:disabled {
   padding: 8px 12px;
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: #f3f6f2;
+  background: var(--panel-soft);
 }
 
 .scoreboard-input {
@@ -2019,7 +2019,7 @@ input:disabled {
   min-height: 52px;
   border: 1px solid #c8d2cb;
   border-radius: 8px;
-  background: #fff;
+  background: var(--panel);
   color: var(--ink);
   text-align: center;
   font-size: 1.45rem;
@@ -2028,8 +2028,8 @@ input:disabled {
 }
 
 .scoreboard-input:disabled {
-  background: #eef1ee;
-  color: #7b837e;
+  background: var(--panel-soft);
+  color: var(--muted);
 }
 
 .scoreboard-sep {
@@ -2076,7 +2076,7 @@ input:disabled {
   overflow-wrap: anywhere;
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: #fff;
+  background: var(--panel);
   transition: border-color 140ms ease, background 140ms ease;
 }
 
@@ -2090,7 +2090,7 @@ input:disabled {
 
 .knockout-option input:checked + .knockout-option-body {
   border-color: var(--primary);
-  background: #eef5f1;
+  background: color-mix(in srgb, var(--primary) 12%, var(--panel));
 }
 
 .knockout-option-body.static {
@@ -2106,7 +2106,7 @@ input:disabled {
   overflow-wrap: anywhere;
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: #fff;
+  background: var(--panel);
 }
 
 .knockout-option-body .team-label {
@@ -2125,7 +2125,7 @@ input:disabled {
 
 .knockout-option-body.static.selected {
   border-color: var(--primary);
-  background: #eef5f1;
+  background: color-mix(in srgb, var(--primary) 12%, var(--panel));
 }
 
 .readonly-grid {
@@ -2250,14 +2250,14 @@ input:disabled {
   min-width: 58px;
   padding: 7px 9px;
   border-radius: 999px;
-  background: #eef5f1;
+  background: color-mix(in srgb, var(--primary) 12%, var(--panel));
   color: var(--primary);
   text-align: center;
   font-weight: 800;
 }
 
 .scoreboard-card.locked {
-  background: #f8f9f8;
+  background: var(--panel);
 }
 
 .scoreboard-card.locked .scoreboard-body,
@@ -2270,7 +2270,7 @@ input:disabled {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  background: #eef1ee;
+  background: var(--panel-soft);
 }
 
 .prediction-hidden,
@@ -2283,7 +2283,7 @@ input:disabled {
   padding: 0 12px;
   border: 1px dashed var(--line);
   border-radius: 8px;
-  background: #f8faf7;
+  background: var(--panel-soft);
   color: var(--muted);
   font-size: 0.84rem;
   font-weight: 600;
