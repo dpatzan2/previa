@@ -1,16 +1,17 @@
 "use client";
 
 import { Save, Trophy } from "lucide-react";
-import { useActionState, useMemo, useState } from "react";
+import { useActionState, useEffect, useMemo, useState } from "react";
 import { savePredictionsAction, saveRoomPredictionsAction } from "@/app/actions";
 import { DateCarousel, DateStatsRow } from "@/components/DateCarousel";
 import { FormFeedback, useActionFeedback } from "@/components/FormFeedback";
 import { MatchPickCard } from "@/components/MatchPickCard";
+import { PhaseTabs } from "@/components/PhaseTabs";
 import { RoomMarketFields } from "@/components/RoomMarketFields";
 import { SubmitButton } from "@/components/SubmitButton";
 import { PredictionResultSummary } from "@/components/PredictionResultSummary";
 import { PopularPredictions } from "@/components/PopularPredictions";
-import { collectDateTabs, groupMatchesByPhase, TBD_DATE_KEY } from "@/lib/match-ui";
+import { collectDateTabs, defaultDateKey, groupMatchesByPhase, TBD_DATE_KEY } from "@/lib/match-ui";
 import type { DisplayMarketAnswer, DisplayMatch, DisplayPrediction, PeerPrediction, PopularPrediction } from "@/lib/match-ui";
 import {
   canViewPeerPredictions,
@@ -21,7 +22,8 @@ import {
 } from "@/lib/phase-deadlines";
 import { stageLabels } from "@/lib/stages";
 import { bonusMarketsForStage, type RoomMarketKey } from "@/lib/room-presets";
-import { formatAppDateKey } from "@/lib/timezone";
+
+const GROUP_BY_STORAGE_KEY = "picks-group-by";
 
 type PicksFormProps = {
   matches: DisplayMatch[];
@@ -70,6 +72,15 @@ export function PicksForm({
     [phaseDeadlines],
   );
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
+  const [groupBy, setGroupBy] = useState<"date" | "phase">("date");
+  // ponytail: preferencia local por navegador; si algun dia debe seguir al usuario entre dispositivos, va al perfil.
+  useEffect(() => {
+    if (localStorage.getItem(GROUP_BY_STORAGE_KEY) === "phase") setGroupBy("phase");
+  }, []);
+  const chooseGroupBy = (value: "date" | "phase") => {
+    setGroupBy(value);
+    localStorage.setItem(GROUP_BY_STORAGE_KEY, value);
+  };
   const saveHandler = roomId ? saveRoomPredictionsAction : savePredictionsAction;
   const [saveState, saveAction, isSaving] = useActionState(saveHandler, null);
   const feedback = useActionFeedback(saveState);
@@ -80,21 +91,18 @@ export function PicksForm({
 
   const now = useMemo(() => new Date(), []);
   const dateTabs = collectDateTabs(matches);
-  const todayAppKey = formatAppDateKey(now);
-  const todayKey = dateTabs.find((tab) => tab.dateKey === todayAppKey)?.dateKey;
-  const nearestKey = dateTabs.reduce<{ key: string; diff: number } | null>((closest, tab) => {
-    if (!tab.kickoffAt) return closest;
-    const diff = Math.abs(tab.kickoffAt.getTime() - now.getTime());
-    return !closest || diff < closest.diff ? { key: tab.dateKey, diff } : closest;
-  }, null)?.key;
-  const defaultDateKey = todayKey ?? nearestKey ?? dateTabs[0]?.dateKey ?? TBD_DATE_KEY;
   const effectiveDateKey =
     selectedDateKey && dateTabs.some((tab) => tab.dateKey === selectedDateKey)
       ? selectedDateKey
-      : defaultDateKey;
+      : defaultDateKey(dateTabs, now);
 
-  const dayMatches = matches.filter((match) => (match.dateKey ?? TBD_DATE_KEY) === effectiveDateKey);
-  const hiddenMatches = matches.filter((match) => (match.dateKey ?? TBD_DATE_KEY) !== effectiveDateKey);
+  const byDate = groupBy === "date";
+  const dayMatches = byDate
+    ? matches.filter((match) => (match.dateKey ?? TBD_DATE_KEY) === effectiveDateKey)
+    : matches;
+  const hiddenMatches = byDate
+    ? matches.filter((match) => (match.dateKey ?? TBD_DATE_KEY) !== effectiveDateKey)
+    : [];
   const dayStats = {
     total: dayMatches.length,
     predicted: dayMatches.filter((match) => {
@@ -109,7 +117,21 @@ export function PicksForm({
     live: dayMatches.filter((match) => match.status === "LIVE").length,
   };
   const phaseGroups = groupMatchesByPhase(dayMatches);
-  const allDayMatchesLocked = dayMatches.length > 0 && dayMatches.every((match) => match.locked);
+  const allDayMatchesLocked =
+    byDate && dayMatches.length > 0 && dayMatches.every((match) => match.locked);
+  const stages = useMemo(
+    () => [...new Set(matches.map((match) => match.stage))],
+    [matches],
+  );
+  const groupCodes = useMemo(
+    () =>
+      [...new Set(
+        matches.flatMap((match) =>
+          match.stage === "GROUP" && match.groupCode ? [match.groupCode] : [],
+        ),
+      )].sort(),
+    [matches],
+  );
 
   const renderMatchEntry = (match: DisplayMatch, isVisible: boolean) => {
     const prediction = predictions[match.id];
@@ -205,6 +227,26 @@ export function PicksForm({
         </section>
       ) : null}
 
+      <div className="view-toggle" role="group" aria-label="Modo de vista">
+        <button
+          type="button"
+          className={byDate ? "active" : ""}
+          aria-pressed={byDate}
+          onClick={() => chooseGroupBy("date")}
+        >
+          Por fecha
+        </button>
+        <button
+          type="button"
+          className={byDate ? "" : "active"}
+          aria-pressed={!byDate}
+          onClick={() => chooseGroupBy("phase")}
+        >
+          Por fase
+        </button>
+      </div>
+
+      {byDate ? (
       <section className="panel scoreboard-panel">
         {dateTabs.length > 1 ? (
           <DateCarousel
@@ -263,6 +305,41 @@ export function PicksForm({
           {hiddenMatches.map((match) => renderMatchEntry(match, false))}
         </div>
       </section>
+      ) : (
+        <PhaseTabs availableStages={stages} groupCodes={groupCodes} phaseDeadlines={deadlineMap}>
+          {({ stage, groupCode }) => {
+            const isVisible = (match: DisplayMatch) =>
+              match.stage === stage && (stage !== "GROUP" || match.groupCode === groupCode);
+            const visibleMatches = matches.filter(isVisible);
+            const deadline = deadlineMap[stage];
+            const banner = deadline
+              ? phaseDeadlineBanner(deadline, { editable: true, deadlineMode, deadlineHoursBefore })
+              : null;
+
+            return (
+              <section className="panel scoreboard-panel">
+                <div className="panel-head">
+                  <h2>
+                    {stage === "GROUP" && groupCode
+                      ? `${stageLabels.GROUP} · Grupo ${groupCode}`
+                      : stageLabels[stage]}
+                  </h2>
+                  <span>{visibleMatches.length} partidos</span>
+                </div>
+                {banner ? (
+                  <div className={`phase-deadline${banner.closed ? " closed" : ""}`}>
+                    <strong>{banner.title}</strong>
+                    <span>{banner.message}</span>
+                  </div>
+                ) : null}
+                <div className="group-block-body">
+                  {matches.map((match) => renderMatchEntry(match, isVisible(match)))}
+                </div>
+              </section>
+            );
+          }}
+        </PhaseTabs>
+      )}
 
       <div className="sticky-actions picks-actions">
         <FormFeedback feedback={feedback} />
