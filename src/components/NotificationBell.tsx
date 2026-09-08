@@ -90,18 +90,15 @@ export function NotificationBell() {
       const panelWidth = Math.min(340, window.innerWidth * 0.88);
 
       const spaceRight = window.innerWidth - rect.right;
-      const spaceLeft = rect.left;
       const next: PanelCoords = { maxHeight: desiredHeight };
 
-      if (spaceRight >= panelWidth) {
-        next.left = rect.left;
-      } else if (spaceLeft >= panelWidth) {
-        next.right = spaceRight;
-      } else if (spaceRight >= spaceLeft) {
-        next.left = Math.max(gap, window.innerWidth - panelWidth - gap);
-      } else {
-        next.right = Math.max(gap, spaceRight);
-      }
+      // Siempre se posiciona con "left" en pixeles absolutos (nunca "right"): preferir alinear
+      // el borde izquierdo del panel con el de la campana si hay lugar a la derecha, si no
+      // alinear el borde derecho del panel con el de la campana - pero siempre clampeado dentro
+      // del viewport, para que ninguna combinacion de posicion de campana / ancho de pantalla
+      // pueda empujarlo fuera por cualquiera de los dos lados.
+      const preferredLeft = spaceRight >= panelWidth ? rect.left : rect.right - panelWidth;
+      next.left = Math.min(Math.max(preferredLeft, gap), Math.max(gap, window.innerWidth - panelWidth - gap));
 
       const spaceBelow = window.innerHeight - rect.bottom - gap;
       const spaceAbove = rect.top - gap;
