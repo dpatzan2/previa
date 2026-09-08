@@ -240,16 +240,22 @@ export type PendingAutomatedMatch = {
 const PENDING_MATCH_HORIZON_MS = 24 * 60 * 60 * 1000;
 
 /**
- * Partidos de competencias con automatizacion habilitada (apiFootballLeagueId seteado, ahora
- * usado solo como bandera de opt-in, ya no para llamar a esa API) que ya arrancaron o arrancan
- * dentro de las proximas 24h y todavia no tienen resultado. Fuente para el paso de busqueda por
- * IA (n8n) en vez de resolver fixtures contra un proveedor externo.
+ * Partidos de cualquier competencia ACTIVA (sin importar su tipo: Mundial, torneo de clubes,
+ * o una personalizada creada por un admin) que ya arrancaron o arrancan dentro de las proximas
+ * 24h y todavia no tienen resultado. Fuente para el paso de busqueda por IA (n8n) en vez de
+ * resolver fixtures contra un proveedor externo.
+ *
+ * Antes filtraba por `apiFootballLeagueId` (un toggle manual de "automatizacion habilitada" por
+ * competencia, vestigio de cuando ese campo guardaba el id de liga de una API externa). Se saco
+ * porque era demasiado facil de olvidar al crear una competencia nueva (paso exactamente eso con
+ * Champions League y LaLiga: quedaron sin resultados automaticos por no tener el campo seteado,
+ * pese a ser competencias reales y automatizables). Toda competencia ACTIVA se automatiza ahora.
  */
 export async function getPendingAutomatedMatches(db: DbClient): Promise<PendingAutomatedMatch[]> {
   const horizon = new Date(Date.now() + PENDING_MATCH_HORIZON_MS);
 
   const competitions = await db.competition.findMany({
-    where: { apiFootballLeagueId: { not: null } },
+    where: { status: "ACTIVE" },
     select: {
       name: true,
       matches: {

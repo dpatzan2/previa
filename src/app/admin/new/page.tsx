@@ -71,12 +71,6 @@ export default async function NewCompetitionPage({
         </label>
 
         <label>
-          Habilitar automatización de resultados
-          <input name="apiFootballLeagueId" type="number" placeholder="Ej. 1 (cualquier número habilita)" />
-          <small>Cualquier valor numérico habilita la actualización automática de resultados vía n8n para esta competencia.</small>
-        </label>
-
-        <label>
           Estado
           <select name="status" defaultValue="DRAFT">
             {competitionStatuses.map((status) => (
@@ -85,6 +79,7 @@ export default async function NewCompetitionPage({
               </option>
             ))}
           </select>
+          <small>Las competencias en estado Activa reciben resultados automáticos (búsqueda web vía n8n).</small>
         </label>
 
         <div className="scoring-rules-grid">
