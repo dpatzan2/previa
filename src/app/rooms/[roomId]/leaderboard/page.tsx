@@ -1,11 +1,60 @@
 import Link from "next/link";
-import { ArrowLeft, Trophy } from "lucide-react";
+import { ArrowLeft, ArrowDown, ArrowUp, Trophy } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { requireRoomMembership } from "@/lib/rooms";
 import { RoomHeader } from "@/components/RoomHeader";
 import { personalPerformance, type PerformanceRow } from "@/lib/personal-performance";
 import { roomMarketLabel, type RoomMarketKey } from "@/lib/room-presets";
+import { rankMovements } from "@/lib/rank-movement";
+import { formatAppDateKey } from "@/lib/timezone";
+
+function RankMovement({ steps }: { steps: number }) {
+  if (steps === 0) return null;
+  const up = steps > 0;
+  const label = `${up ? "Subio" : "Bajo"} ${Math.abs(steps)} ${Math.abs(steps) === 1 ? "puesto" : "puestos"} en la ultima jornada`;
+  return (
+    <span className={`rank-move ${up ? "up" : "down"}`} title={label} aria-label={label}>
+      {up ? <ArrowUp size={12} strokeWidth={3} /> : <ArrowDown size={12} strokeWidth={3} />}
+      {up ? `+${steps}` : steps}
+    </span>
+  );
+}
+
+/**
+ * Puntos que cada usuario sumo en la ultima jornada (dia GT) con partidos terminados.
+ * Devuelve null si solo se ha jugado una jornada: no hay tabla anterior con que comparar.
+ */
+async function lastMatchdayPoints(roomId: string, competitionId: string | null) {
+  if (!competitionId) return null;
+  const finished = await prisma.competitionMatch.findMany({
+    where: { competitionId, status: "FINISHED", kickoffAt: { not: null } },
+    select: { id: true, kickoffAt: true },
+  });
+  const dayOf = (kickoffAt: Date | null) => formatAppDateKey(kickoffAt!);
+  const days = [...new Set(finished.map((match) => dayOf(match.kickoffAt)))].sort();
+  if (days.length < 2) return null;
+  const lastDay = days[days.length - 1];
+  const matchIds = finished.filter((match) => dayOf(match.kickoffAt) === lastDay).map((match) => match.id);
+
+  const onLastDay = { roomId, competitionMatchId: { in: matchIds } };
+  const [predictionSums, answerSums, unfinished] = await Promise.all([
+    prisma.prediction.groupBy({ by: ["userId"], where: onLastDay, _sum: { points: true } }),
+    prisma.predictionAnswer.groupBy({ by: ["userId"], where: onLastDay, _sum: { points: true } }),
+    prisma.competitionMatch.count({ where: { competitionId, status: { not: "FINISHED" } } }),
+  ]);
+  // El campeon se puntua al cerrar la competencia, o sea en la ultima jornada.
+  const championSums =
+    unfinished === 0
+      ? await prisma.roomTournamentPick.groupBy({ by: ["userId"], where: { roomId }, _sum: { points: true } })
+      : [];
+
+  const points = new Map<string, number>();
+  for (const group of [...predictionSums, ...answerSums, ...championSums]) {
+    points.set(group.userId, (points.get(group.userId) ?? 0) + (group._sum.points ?? 0));
+  }
+  return points;
+}
 
 function PerformanceGroup({
   tone,
@@ -46,7 +95,7 @@ export default async function RoomLeaderboardPage({
 
   // Solo partidos terminados: los pendientes valen 0 y contarian como fallo.
   const myFinished = { roomId, userId: user.id, competitionMatch: { status: "FINISHED" as const } };
-  const [entries, hitGroups, myScores, bonusAttempts, bonusHits] = await Promise.all([
+  const [entries, hitGroups, myScores, bonusAttempts, bonusHits, dayPoints] = await Promise.all([
     prisma.roomLeaderboardEntry.findMany({
       where: { roomId },
       include: { user: { select: { displayName: true } } },
@@ -78,6 +127,7 @@ export default async function RoomLeaderboardPage({
       where: { ...myFinished, points: { gt: 0 } },
       _count: { _all: true },
     }),
+    lastMatchdayPoints(roomId, room.externalTournamentId),
   ]);
 
   const bonusHitsByMarket = new Map(bonusHits.map((group) => [group.marketKey, group._count._all]));
@@ -100,12 +150,23 @@ export default async function RoomLeaderboardPage({
 
   const hitsByUserId = new Map(hitGroups.map((group) => [group.userId, group._count._all]));
   const leaderPoints = entries[0]?.totalPoints ?? 0;
+  const movements = dayPoints
+    ? rankMovements(
+        entries.map((entry) => ({
+          userId: entry.userId,
+          points: entry.totalPoints,
+          predictionCount: entry.predictionCount,
+        })),
+        dayPoints,
+      )
+    : new Map<string, number>();
   const rows = entries.map((entry) => ({
     id: entry.userId,
     name: entry.user.displayName,
     hits: hitsByUserId.get(entry.userId) ?? 0,
     points: entry.totalPoints,
     gap: leaderPoints - entry.totalPoints,
+    movement: movements.get(entry.userId) ?? 0,
   }));
 
   const podiumRows = rows.slice(0, 3);
@@ -152,6 +213,7 @@ export default async function RoomLeaderboardPage({
                   </div>
                   <div className="podium-block">
                     <span className="podium-rank">{place}</span>
+                    <RankMovement steps={row.movement} />
                   </div>
                 </div>
               );
@@ -164,7 +226,10 @@ export default async function RoomLeaderboardPage({
                 const isYou = row.id === user.id;
                 return (
                   <li key={row.id} className={`rank-row${isYou ? " is-you" : ""}`}>
-                    <span className="rank-pos">{index + 4}</span>
+                    <span className="rank-pos">
+                      {index + 4}
+                      <RankMovement steps={row.movement} />
+                    </span>
                     <span className="rank-avatar" aria-hidden="true">
                       {row.name.charAt(0).toUpperCase()}
                     </span>
