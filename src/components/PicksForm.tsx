@@ -1,7 +1,7 @@
 "use client";
 
 import { Save, Trophy } from "lucide-react";
-import { useActionState, useEffect, useMemo, useState } from "react";
+import { useActionState, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { savePredictionsAction, saveRoomPredictionsAction } from "@/app/actions";
 import { DateCarousel, DateStatsRow } from "@/components/DateCarousel";
 import { FormFeedback, useActionFeedback } from "@/components/FormFeedback";
@@ -24,6 +24,24 @@ import { stageLabels } from "@/lib/stages";
 import { bonusMarketsForStage, type RoomMarketKey } from "@/lib/room-presets";
 
 const GROUP_BY_STORAGE_KEY = "picks-group-by";
+
+// Los campos son no controlados: hay cambios si algun valor difiere de su valor inicial (default*).
+function formHasChanges(form: HTMLFormElement) {
+  return Array.from(form.elements).some((element) => {
+    if (element instanceof HTMLInputElement) {
+      if (element.type === "hidden") return false;
+      if (element.type === "radio" || element.type === "checkbox") {
+        return element.checked !== element.defaultChecked;
+      }
+      return element.value !== element.defaultValue;
+    }
+    if (element instanceof HTMLSelectElement) {
+      return Array.from(element.options).some((option) => option.selected !== option.defaultSelected);
+    }
+    if (element instanceof HTMLTextAreaElement) return element.value !== element.defaultValue;
+    return false;
+  });
+}
 
 type PicksFormProps = {
   matches: DisplayMatch[];
@@ -84,6 +102,11 @@ export function PicksForm({
   const saveHandler = roomId ? saveRoomPredictionsAction : savePredictionsAction;
   const [saveState, saveAction, isSaving] = useActionState(saveHandler, null);
   const feedback = useActionFeedback(saveState);
+  const formRef = useRef<HTMLFormElement>(null);
+  const [isDirty, setIsDirty] = useState(false);
+  const checkDirty = useCallback(() => {
+    if (formRef.current) setIsDirty(formHasChanges(formRef.current));
+  }, []);
   const completedPicks = Object.values(predictions).filter(
     (prediction) =>
       prediction.predictedHomeScore !== null && prediction.predictedAwayScore !== null,
@@ -119,6 +142,10 @@ export function PicksForm({
   const phaseGroups = groupMatchesByPhase(dayMatches);
   const allDayMatchesLocked =
     byDate && dayMatches.length > 0 && dayMatches.every((match) => match.locked);
+  // Tras guardar React resetea el form a los nuevos valores; al cambiar de fecha se desmontan campos.
+  useEffect(() => {
+    checkDirty();
+  }, [checkDirty, saveState, predictions, marketAnswers, effectiveDateKey, groupBy]);
   const stages = useMemo(
     () => [...new Set(matches.map((match) => match.stage))],
     [matches],
@@ -190,7 +217,13 @@ export function PicksForm({
   };
 
   return (
-    <form action={saveAction} className="prediction-form">
+    <form
+      ref={formRef}
+      action={saveAction}
+      className="prediction-form"
+      onInput={checkDirty}
+      onChange={checkDirty}
+    >
       {roomId ? <input type="hidden" name="roomId" value={roomId} /> : null}
       <div className="picks-overview panel">
         <div>
@@ -350,13 +383,15 @@ export function PicksForm({
             Los partidos de esta fecha ya estan cerrados. Cambia de fecha para seguir pronosticando.
           </p>
         ) : null}
-        <SubmitButton
-          isPending={isSaving}
-          pendingLabel="Guardando..."
-          label={hasOpenPhases ? "Guardar pronosticos" : "Pronosticos cerrados"}
-          disabled={!hasOpenPhases}
-          icon={<Save size={18} />}
-        />
+        {/* Solo aparece cuando el usuario realmente cambio algo. */}
+        {hasOpenPhases && (isDirty || isSaving) ? (
+          <SubmitButton
+            isPending={isSaving}
+            pendingLabel="Guardando..."
+            label="Guardar pronosticos"
+            icon={<Save size={18} />}
+          />
+        ) : null}
       </div>
     </form>
   );

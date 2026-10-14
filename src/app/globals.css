@@ -3642,7 +3642,7 @@ input:disabled {
 
   /* La barra flotante tapa el final del formulario: reservamos su alto segun cuantas filas trae
      (solo el boton, o boton + aviso de fecha cerrada + mensaje de guardado). */
-  .prediction-form {
+  .prediction-form:has(.picks-actions .primary-button) {
     padding-bottom: 78px;
   }
 
